@@ -71,6 +71,7 @@ export default function LiveWorkoutScreen() {
   
   const [loading, setLoading] = useState(true);
   const [workoutName, setWorkoutName] = useState("");
+  const [rawExercises, setRawExercises] = useState<ExerciseBlock[]>([]);
   
   // We need to flatten the nested structure into a linear list of "steps" for the live workout
   // Or handle it hierarchically. Linear is usually better for "Next/Prev" flow.
@@ -150,29 +151,58 @@ export default function LiveWorkoutScreen() {
 
       // Flatten the structure
       const exercises: ExerciseBlock[] = data.exercises || [];
+      setRawExercises(exercises);
       const queue: FlattenedExerciseItem[] = [];
+
+      // Calculate total sets based on the label of the LAST set in the LAST block
+      let totalSetsFromLabel = 0;
+      if (exercises.length > 0) {
+          const lastBlock = exercises[exercises.length - 1];
+          if (lastBlock.sets.length > 0) {
+              const lastSet = lastBlock.sets[lastBlock.sets.length - 1];
+              // Extract number from label (e.g. "Set 10" -> 10)
+              const match = lastSet.label.match(/\d+/);
+              if (match) {
+                  totalSetsFromLabel = parseInt(match[0], 10);
+              } else {
+                  // Fallback if no number found, maybe just count total sets?
+                  // But user insisted on label. Let's use total count as fallback.
+                  let count = 0;
+                  exercises.forEach(b => count += b.sets.length);
+                  totalSetsFromLabel = count;
+              }
+          }
+      }
 
       exercises.forEach((block, bIdx) => {
         block.sets.forEach((set, sIdx) => {
-            set.movements.forEach((movement, mIdx) => {
-                // For each movement, we add it to the queue.
-                // If the movement has multiple sets (setsCount > 1), do we add it multiple times?
-                // Usually in a live workout app, yes, or we have a counter on the screen.
-                // Let's add it multiple times so "Next" advances the set.
-                // Or better: Keep one item but have internal state for "Current Set".
-                // But simpler for navigation is to flatten everything.
-                const setsCount = movement.setsCount || 1;
-                for (let i = 1; i <= setsCount; i++) {
-                    queue.push({
-                        movement: movement,
-                        setLabel: set.label,
-                        blockIndex: bIdx,
-                        setIndex: sIdx,
-                        movementIndex: mIdx,
-                        totalSets: setsCount,
-                        currentSetNumber: i
-                    });
-                }
+            // Extract current set number from label
+            let currentSetNum = 0;
+            const match = set.label.match(/\d+/);
+            if (match) {
+                currentSetNum = parseInt(match[0], 10);
+            } else {
+                // Fallback: use global counter logic if label doesn't have number?
+                // Or maybe just index + 1?
+                // Let's assume the label has the number as per user request.
+                // If not, we might need a counter.
+                // Let's use a simple counter as fallback for safety.
+                currentSetNum = sIdx + 1; 
+            }
+
+            set.movements.forEach((movement: any, mIdx) => {
+                const movementImage = movement.imageUrl || movement.mainImage || movement.image;
+                const enrichedMovement = { ...movement, image: movementImage };
+                
+                queue.push({
+                    movement: enrichedMovement,
+                    setLabel: set.label,
+                    blockIndex: bIdx,
+                    setIndex: sIdx,
+                    movementIndex: mIdx,
+                    totalSets: totalSetsFromLabel || 1, // Avoid 0
+                    currentSetNumber: currentSetNum || (sIdx + 1)
+                });
             });
         });
       });
@@ -224,7 +254,7 @@ export default function LiveWorkoutScreen() {
 
   const currentItem = flatWorkoutQueue[currentIndex];
   const currentExercise = currentItem.movement;
-  const progressPercent = Math.round(((currentIndex + 1) / flatWorkoutQueue.length) * 100);
+  const progressPercent = flatWorkoutQueue.length > 1 ? Math.round((currentIndex / (flatWorkoutQueue.length - 1)) * 100) : 0;
   
   const videoId = currentExercise.videoUrl ? getYoutubeId(currentExercise.videoUrl) : null;
   const mainImage = currentExercise.image; // Already cleaned/processed in backend or consistent
@@ -393,7 +423,7 @@ export default function LiveWorkoutScreen() {
             </View>
         </View>
 
-        {/* Workout List Section (Up Next) */}
+        {/* Workout List Section (Full List) */}
         <View style={styles.workoutListSection}>
             <TouchableOpacity 
                 style={styles.workoutListHeader}
@@ -401,41 +431,91 @@ export default function LiveWorkoutScreen() {
             >
                 <View style={styles.workoutListTitleContainer}>
                     <MaterialIcons name="list-alt" size={20} color={PRIMARY} />
-                    <Text style={styles.workoutListTitle}>UP NEXT</Text>
+                    <Text style={styles.workoutListTitle}>WORKOUT PLAN</Text>
                 </View>
                 <MaterialIcons name={isExpanded ? "expand-less" : "expand-more"} size={24} color={PRIMARY} />
             </TouchableOpacity>
 
             {isExpanded && (
-                <View style={styles.workoutList}>
-                    {flatWorkoutQueue.slice(currentIndex + 1, currentIndex + 6).map((item, index) => {
-                        return (
-                            <View 
-                                key={index} 
-                                style={styles.listItem}
-                            >
-                                <View style={styles.listItemLeft}>
-                                    <View style={styles.inactiveDot} />
-                                    <View>
-                                        <Text style={styles.listItemText}>
-                                            {item.movement.name}
-                                        </Text>
-                                        <Text style={styles.listItemSubText}>
-                                            {item.setLabel} • Set {item.currentSetNumber}/{item.totalSets}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <Text style={styles.listItemMeta}>
-                                    {item.movement.reps} reps
-                                </Text>
+                <View style={styles.exercisesContainer}>
+                    {rawExercises.map((block, blockIndex) => (
+                        <View key={`block-${blockIndex}`} style={styles.exerciseBlock}>
+                            <View style={styles.blockHeader}>
+                                <View style={styles.blockHeaderIndicator} />
+                                <Text style={styles.blockTitle}>Block {blockIndex + 1}</Text>
                             </View>
-                        );
-                    })}
-                    {flatWorkoutQueue.length - currentIndex - 6 > 0 && (
-                        <Text style={{ color: SUBTEXT_COLOR, textAlign: 'center', marginTop: 8 }}>
-                            + {flatWorkoutQueue.length - currentIndex - 6} more sets
-                        </Text>
-                    )}
+
+                            <View style={styles.blockContent}>
+                                {block.sets.map((set, setIndex) => (
+                                    <View key={`set-${blockIndex}-${setIndex}`} style={styles.setContainer}>
+                                        <Text style={styles.setLabel}>{set.label}</Text>
+                                        <View style={styles.movementsList}>
+                                            {set.movements.map((movement, moveIndex) => {
+                                                // Find corresponding items in flatWorkoutQueue
+                                                const setSteps = flatWorkoutQueue
+                                                    .map((q, idx) => ({ ...q, qIdx: idx }))
+                                                    .filter(q => 
+                                                        q.blockIndex === blockIndex && 
+                                                        q.setIndex === setIndex && 
+                                                        q.movementIndex === moveIndex
+                                                    );
+                                                
+                                                return (
+                                                    <View key={`move-group-${blockIndex}-${setIndex}-${moveIndex}`} style={{ gap: 8 }}>
+                                                        {setSteps.map((qStep) => {
+                                                            const isActive = currentIndex === qStep.qIdx;
+                                                            return (
+                                                                <TouchableOpacity 
+                                                                    key={`step-${qStep.qIdx}`} 
+                                                                    style={[
+                                                                        styles.movementItem,
+                                                                        isActive && { borderColor: PRIMARY, borderWidth: 1 }
+                                                                    ]}
+                                                                    onPress={() => {
+                                                                        setCurrentIndex(qStep.qIdx);
+                                                                    }}
+                                                                >
+                                                                    <ImageBackground 
+                                                                        source={{ uri: qStep.movement.image || 'https://via.placeholder.com/150' }} 
+                                                                        style={styles.movementImage}
+                                                                        imageStyle={{ borderRadius: 8 }}
+                                                                    />
+                                                                    <View style={styles.movementInfo}>
+                                                                        <View style={styles.movementHeader}>
+                                                                            <Text style={styles.movementName} numberOfLines={1}>
+                                                                                {qStep.movement.name}
+                                                                            </Text>
+                                                                            <View style={styles.categoryBadge}>
+                                                                                <Text style={styles.categoryText}>
+                                                                                    {qStep.movement.category}
+                                                                                </Text>
+                                                                            </View>
+                                                                        </View>
+                                                                        <Text style={styles.movementDetails}>
+                                                                            Set {qStep.currentSetNumber}/{qStep.totalSets} • {qStep.movement.reps ? `${qStep.movement.reps} reps` : ''}
+                                                                        </Text>
+                                                                    </View>
+                                                                    {isActive && (
+                                                                        <MaterialIcons name="play-circle-filled" size={24} color={PRIMARY} />
+                                                                    )}
+                                                                </TouchableOpacity>
+                                                            );
+                                                        })}
+                                                    </View>
+                                                );
+                                            })}
+                                        </View>
+                                        {set.rest ? (
+                                            <View style={styles.restContainer}>
+                                                <MaterialIcons name="timer" size={16} color={PRIMARY} />
+                                                <Text style={styles.restText}>Rest: {set.rest}s</Text>
+                                            </View>
+                                        ) : null}
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    ))}
                 </View>
             )}
         </View>
@@ -754,44 +834,118 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
-  workoutList: {
-    gap: 12,
+  exercisesContainer: {
+    gap: 40,
   },
-  listItem: {
+  exerciseBlock: {
+    gap: 16,
+  },
+  blockHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
+  },
+  blockHeaderIndicator: {
+    height: 32,
+    width: 4,
+    backgroundColor: PRIMARY,
+  },
+  blockTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    fontStyle: 'italic',
+    color: '#f1f5f9',
+    letterSpacing: -0.5,
+  },
+  blockContent: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
     padding: 16,
-    backgroundColor: 'rgba(30, 41, 59, 0.3)',
     borderWidth: 1,
-    borderColor: 'rgba(51, 65, 85, 0.5)',
-    borderRadius: 12,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  listItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  setContainer: {
+    marginBottom: 16,
   },
-  inactiveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#475569',
-  },
-  listItemText: {
-    color: '#cbd5e1',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  listItemSubText: {
-    color: '#64748b',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  listItemMeta: {
-    color: '#94a3b8',
+  setLabel: {
+    color: PRIMARY,
     fontSize: 12,
     fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    marginBottom: 16,
+  },
+  movementsList: {
+    gap: 12,
+  },
+  movementItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: SURFACE_DARK,
+    borderRadius: 12,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  movementImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: '#334155',
+  },
+  movementInfo: {
+    flex: 1,
+  },
+  movementHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 2,
+  },
+  movementName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#f1f5f9',
+    flex: 1,
+    marginRight: 8,
+  },
+  categoryBadge: {
+    backgroundColor: 'rgba(204, 255, 0, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.2)',
+  },
+  categoryText: {
+    color: PRIMARY,
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  movementDetails: {
+    fontSize: 14,
+    color: '#94a3b8',
+  },
+  restContainer: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(204, 255, 0, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.4)',
+    borderStyle: 'dashed',
+    padding: 10,
+    borderRadius: 8,
+  },
+  restText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: PRIMARY,
+    textTransform: 'uppercase',
   },
   footer: {
     position: 'absolute',
