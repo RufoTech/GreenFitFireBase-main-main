@@ -210,6 +210,49 @@ export default function WeeklyProgramScreen() {
                 {weekSchedule.map((item) => {
                     
                     if (item.type !== 'rest') {
+                        // Check if image is missing or placeholder
+                        const isNoImage = !item.image || item.image.includes('placeholder');
+
+                        if (isNoImage) {
+                            return (
+                                <View key={item.day} style={styles.noImageCard}>
+                                    <View style={styles.noImageHeader}>
+                                        <View style={styles.noImageHeaderLeft}>
+                                            <Text style={styles.noImageLevelText}>DAY {item.day}</Text>
+                                            <Text style={styles.noImageTitle}>{item.title}</Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.noImageDetailsRow}>
+                                        <View style={styles.noImageDetailItem}>
+                                            <MaterialIcons name="schedule" size={16} color={PRIMARY} />
+                                            <Text style={styles.noImageDetailText}>{item.duration} min</Text>
+                                        </View>
+                                        <View style={styles.noImageDetailItem}>
+                                            <MaterialIcons name="fitness-center" size={16} color={PRIMARY} />
+                                            <Text style={styles.noImageDetailText}>{item.exercises} exercises</Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: -10 }}>
+                                        <TouchableOpacity 
+                                            style={styles.addButton}
+                                            onPress={() => router.push({
+                                                pathname: '/screens/WorkoutStartScreen',
+                                                params: { 
+                                                    workout: JSON.stringify(item),
+                                                    programId: programId,
+                                                    week: activeWeek
+                                                }
+                                            })}
+                                        >
+                                            <MaterialIcons name="play-arrow" size={24} color="#1f230f" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            );
+                        }
+
                         return (
                             <View key={item.day} style={item.isCurrent ? styles.currentDayCard : styles.dayCard}>
                                 <View style={styles.currentDayHeader}>
@@ -580,5 +623,70 @@ const styles = StyleSheet.create({
   activeModalItemText: {
     color: PRIMARY,
     fontWeight: 'bold',
+  },
+  noImageCard: {
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: '#1f230f', // Darker green/black mix
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  noImageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  noImageHeaderLeft: {
+    flexDirection: 'column',
+    gap: 4,
+    flex: 1,
+  },
+  noImageLevelText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 4,
+    color: PRIMARY, 
+  },
+  noImageTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#f8fafc',
+    lineHeight: 24,
+  },
+  noImageDetailsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginBottom: 24,
+    columnGap: 16,
+    rowGap: 12,
+  },
+  noImageDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  noImageDetailText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#94a3b8',
+    marginLeft: 4,
+  },
+  addButton: { // Play button style
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: PRIMARY,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
