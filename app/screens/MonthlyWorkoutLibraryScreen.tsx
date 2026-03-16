@@ -2,7 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -44,6 +44,8 @@ export default function MonthlyWorkoutLibraryScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedProgram, setSelectedProgram] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
+
+  const { openProgramId } = useLocalSearchParams();
 
   const handleProgramPress = (program: any) => {
     setSelectedProgram(program);
@@ -157,6 +159,19 @@ export default function MonthlyWorkoutLibraryScreen() {
 
             setUserPrograms(fetchedPrograms);
             setLoading(false);
+
+            // Check if we need to open a specific program from navigation params
+            if (openProgramId) {
+                const programToOpen = fetchedPrograms.find(p => p.id === openProgramId);
+                if (programToOpen) {
+                    setSelectedProgram(programToOpen);
+                    setModalVisible(true);
+                    // Reset param to avoid re-opening on simple re-focus? 
+                    // Expo router params might persist, but state reset handles it usually.
+                    // Or we can use setParams to clear it if needed.
+                    router.setParams({ openProgramId: '' });
+                }
+            }
           },
           (error) => {
             console.error('Error fetching user programs:', error);
@@ -165,7 +180,7 @@ export default function MonthlyWorkoutLibraryScreen() {
         );
 
       return unsubscribe;
-    }, [])
+    }, [openProgramId]) // Re-run if openProgramId changes
   );
 
   const handleDeleteProgram = (programId: string) => {

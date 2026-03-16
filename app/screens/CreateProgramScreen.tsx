@@ -1,9 +1,12 @@
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { SelectionStore } from '../utils/SelectionStore';
-import React, { useState, useEffect } from 'react';
+import firestore from '@react-native-firebase/firestore';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -12,12 +15,9 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  Alert,
-  Modal,
-  ActivityIndicator
+  View
 } from 'react-native';
-import firestore from '@react-native-firebase/firestore';
+import { SelectionStore } from '../utils/SelectionStore';
 
 import auth from '@react-native-firebase/auth';
 
@@ -30,6 +30,7 @@ export default function CreateProgramScreen() {
   const [showLimitAlert, setShowLimitAlert] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successProgramName, setSuccessProgramName] = useState('');
+  const [successProgramId, setSuccessProgramId] = useState('');
 
   const [loading, setLoading] = useState(false);
   const weeks = [1, 2, 3, 4];
@@ -247,15 +248,18 @@ export default function CreateProgramScreen() {
       };
 
       const programRef = firestore().collection('user_programs').doc();
+      const newProgramId = programRef.id;
 
       await programRef.set(programData);
-      await firestore().collection('user_program_weeks').doc(programRef.id).set({
+      await firestore().collection('user_program_weeks').doc(newProgramId).set({
         userId: user.uid,
         createdAt: firestore.FieldValue.serverTimestamp(),
         weeks: workoutsByWeek,
       });
 
       setSuccessProgramName(programName);
+      // Store the ID so we can pass it to the next screen
+      setSuccessProgramId(newProgramId);
       setShowSuccessModal(true);
       
       // We no longer navigate immediately, wait for user action in modal
@@ -553,7 +557,11 @@ export default function CreateProgramScreen() {
                             style={[styles.successButtonPrimary, { backgroundColor: theme.primary }]}
                             onPress={() => {
                                 setShowSuccessModal(false);
-                                router.replace('/screens/MonthlyWorkoutLibraryScreen');
+                                // Pass the program ID to open the modal in the next screen
+                                router.replace({
+                                    pathname: '/screens/MonthlyWorkoutLibraryScreen',
+                                    params: { openProgramId: successProgramId }
+                                });
                             }}
                         >
                             <MaterialIcons name="play-arrow" size={24} color="#1f230f" />

@@ -1,23 +1,23 @@
-import React, { useState, useCallback } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
+  Dimensions,
+  ImageBackground,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
-  View,
-  SafeAreaView,
-  StatusBar,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
   TextInput,
-  ImageBackground,
-  Dimensions,
-  ActivityIndicator
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import firestore from '@react-native-firebase/firestore';
-import auth from '@react-native-firebase/auth';
 
 const { width } = Dimensions.get('window');
 
@@ -65,7 +65,7 @@ export default function ExerciseLibraryScreen() {
                 id: doc.id,
                 ...data,
                 muscle: data.target || 'Full Body', // Map target to muscle for filtering
-                name: data.title, // Map title to name
+                name: data.name || data.title || 'Custom Workout', // Map title to name (new workouts use name, old use title)
                 level: data.level || 'Custom',
                 levelColor: levelColor,
                 duration: data.duration ? (data.duration.toString().includes('min') ? data.duration : `${data.duration} mins`) : '0 mins',
@@ -89,8 +89,11 @@ export default function ExerciseLibraryScreen() {
   const allItems = [...customWorkouts, ...EXERCISES];
 
   const filteredExercises = allItems.filter(ex => {
-    const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase()) || 
-                          ex.muscle.toLowerCase().includes(search.toLowerCase());
+    const name = ex.name ? ex.name.toLowerCase() : '';
+    const muscle = ex.muscle ? ex.muscle.toLowerCase() : '';
+    const searchText = search ? search.toLowerCase() : '';
+    
+    const matchesSearch = name.includes(searchText) || muscle.includes(searchText);
     
     return matchesSearch;
   });
@@ -104,7 +107,7 @@ export default function ExerciseLibraryScreen() {
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={PRIMARY} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Exercise Library</Text>
+        <Text style={styles.headerTitle}>Exercise Lisbrary</Text>
         <TouchableOpacity style={styles.iconButton}>
           <MaterialIcons name="notifications" size={24} color={PRIMARY} />
         </TouchableOpacity>
@@ -159,8 +162,12 @@ export default function ExerciseLibraryScreen() {
                       <Text style={[styles.noImageLevelText, { color: workout.levelColor || '#ccff00' }]}>
                         {workout.level}
                       </Text>
-                      <Text style={styles.noImageTitle}>{workout.name}</Text>
                     </View>
+                  </View>
+
+                  {/* Centered Large Title */}
+                  <View style={styles.noImageTitleContainer}>
+                     <Text style={styles.noImageTitle}>{workout.name}</Text>
                   </View>
 
                   {/* Details Section */}
@@ -455,8 +462,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   noImageHeaderLeft: {
-    flexDirection: 'column',
-    gap: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  noImageTitleContainer: {
+      paddingVertical: 12,
+      marginBottom: 8,
   },
   noImageLevelText: {
     fontSize: 10,
@@ -466,10 +478,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   noImageTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#f8fafc',
-    lineHeight: 24,
+    color: '#fff',
+    lineHeight: 28,
   },
   noImageDetailsRow: {
     flexDirection: 'row',

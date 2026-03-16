@@ -449,6 +449,67 @@ func secureDataHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Təbrik edirik! Siz Firebase ilə təsdiqlənmiş istifadəçisiniz. Budur sizin gizli məlumatlarınız.")
 }
 
+// createCustomWorkoutHandler handles creating a new custom workout
+func createCustomWorkoutHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	token := r.Context().Value("userToken").(*auth.Token)
+	uid := token.UID
+
+	var payload struct {
+		Name          string        `json:"name"`
+		Level         string        `json:"level"`
+		TargetMuscles []string      `json:"targetMuscles"`
+		Equipment     []string      `json:"equipment"`
+		Duration      string        `json:"duration"`
+		CoverImage    string        `json:"coverImage"`
+		Exercises     []interface{} `json:"exercises"` // We'll store this as raw JSON/Map in Firestore
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if payload.Name == "" {
+		http.Error(w, "Program name is required", http.StatusBadRequest)
+		return
+	}
+
+	// Prepare data for Firestore
+	workoutData := map[string]interface{}{
+		"userId":            uid,
+		"name":              payload.Name,
+		"level":             payload.Level,
+		"targetMuscles":     payload.TargetMuscles,
+		"equipment":         payload.Equipment,
+		"duration":          payload.Duration,
+		"coverImage":        payload.CoverImage,
+		"exercises":         payload.Exercises,
+		"workoutTarget":     "Custom",
+		"workout_type_name": "Custom",
+		"createdAt":         time.Now().Format(time.RFC3339),
+		"isCustom":          true,
+	}
+
+	ctx := context.Background()
+	docRef, _, err := firestoreClient.Collection("customUserWorkouts").Add(ctx, workoutData)
+	if err != nil {
+		log.Printf("Error creating custom workout: %v", err)
+		http.Error(w, "Failed to save workout", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Workout created successfully",
+		"id":      docRef.ID,
+	})
+}
+
 func main() {
 	// 1. Firebase üçün context yaradırıq
 	ctx := context.Background()
@@ -491,6 +552,9 @@ func main() {
 
 	// YENİ: Məşq planını və detallarını gətirən rota
 	http.HandleFunc("/api/workout-plan", authMiddleware(getWorkoutPlanHandler))
+
+	// NEW: Create Custom Workout
+	http.HandleFunc("/api/create-custom-workout", authMiddleware(createCustomWorkoutHandler))
 
 	fmt.Println("Server http://localhost:8080 ünvanında dinləyir...")
 	log.Fatal(http.ListenAndServe(":8080", nil))

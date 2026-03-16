@@ -1,6 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -97,8 +96,8 @@ export default function CreateCustomWorkoutScreen() {
           category: data.type || data.category || 'General',
           exerciseId: data.id,
           name: data.name,
-          reps: data.reps || '10',
-          setsCount: data.sets ? parseInt(String(data.sets)) : 1,
+          reps: data.reps || '1',
+          setsCount: data.sets ? (isNaN(parseInt(String(data.sets))) ? 1 : parseInt(String(data.sets))) : 1,
           image: data.mainImage || data.image || 'https://via.placeholder.com/150',
           videoUrl: data.videoUrl || '',
           instructions: data.instructions || ''
@@ -237,7 +236,7 @@ export default function CreateCustomWorkoutScreen() {
           if (m._id === movementId) {
             return {
               ...m,
-              [field]: field === 'setsCount' ? parseInt(value) || 0 : value
+              [field]: field === 'setsCount' ? (isNaN(parseInt(value)) ? 0 : parseInt(value)) : value
             };
           }
           return m;
@@ -329,20 +328,35 @@ export default function CreateCustomWorkoutScreen() {
       // Calculate total exercise count
       const exerciseCount = blocks.reduce((acc, b) => acc + b.sets.reduce((sAcc, s) => sAcc + s.movements.length, 0), 0);
 
-      await firestore().collection('customUserWorkouts').add({
-        userId,
-        name: programName, // Changed from title to name to match new structure
-        level: level || 'Custom', 
-        targetMuscles: targetMuscle ? [targetMuscle] : ['Full Body'], // Array
-        equipment: equipment ? [equipment] : ['None'], // Array
-        duration: duration || '45', 
-        coverImage: coverImage || 'https://via.placeholder.com/300', 
-        exercises: cleanedExercises,
-        workoutTarget: 'Custom',
-        workout_type_name: 'Custom',
-        createdAt: new Date().toISOString(),
-        isCustom: true
+      // --- Use Go Backend ---
+      const token = await user.getIdToken();
+      
+      const payload = {
+        name: programName,
+        level: level || 'Custom',
+        targetMuscles: targetMuscle ? [targetMuscle] : ['Full Body'],
+        equipment: equipment ? [equipment] : ['None'],
+        duration: duration || '45',
+        coverImage: coverImage || 'https://via.placeholder.com/300',
+        exercises: cleanedExercises
+      };
+
+      const response = await fetch('http://10.0.2.2:8080/api/create-custom-workout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to save program');
+      }
+
+      const responseData = await response.json();
+      console.log("Workout saved via Go backend:", responseData);
 
       Alert.alert("Success", "Program created successfully!", [
         { text: "OK", onPress: () => router.back() }
@@ -510,7 +524,7 @@ export default function CreateCustomWorkoutScreen() {
                                   style={styles.setRepInput}
                                   value={movement.reps}
                                   onChangeText={(val) => handleUpdateMovement(movement._id, 'reps', val)}
-                                  placeholder="-"
+                                  placeholder="1"
                                   placeholderTextColor="#64748b"
                                 />
                                 <Text style={styles.setRepLabel}>Reps</Text>
