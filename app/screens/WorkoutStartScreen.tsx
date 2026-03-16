@@ -170,7 +170,7 @@ export default function WorkoutStartScreen() {
                     alert("Error: Workout ID is missing. Cannot start workout.");
                     return;
                 }
-                router.push({
+                router.replace({
                     pathname: '/screens/LiveWorkoutScreen',
                     params: { workoutId: workout.id }
                 });
