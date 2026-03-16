@@ -43,20 +43,32 @@ type MuscleGroup struct {
 	ImageURL string `firestore:"imageUrl" json:"imageUrl"`
 }
 
-type ExerciseDetail struct {
+type Movement struct {
+	Category     string        `firestore:"category" json:"category"`
+	ExerciseID   string        `firestore:"exerciseId" json:"exerciseId"`
 	Name         string        `firestore:"name" json:"name"`
-	Reps         interface{}   `firestore:"reps" json:"reps"` // string or int
-	Sets         interface{}   `firestore:"sets" json:"sets"` // string or int
+	Reps         interface{}   `firestore:"reps" json:"reps"`
+	SetsCount    interface{}   `firestore:"setsCount" json:"setsCount"`
 	VideoURL     string        `firestore:"videoUrl" json:"videoUrl"`
 	MuscleGroups []MuscleGroup `firestore:"muscleGroups" json:"muscleGroups"`
 	MainImage    string        `firestore:"mainImage" json:"mainImage"`
-	ImageURL     string        `firestore:"imageUrl" json:"imageUrl"` // Fallback for mainImage
+	ImageURL     string        `firestore:"imageUrl" json:"imageUrl"`
 	Instructions string        `firestore:"instructions" json:"instructions"`
 }
 
+type WorkoutSet struct {
+	Label     string     `firestore:"label" json:"label"`
+	Movements []Movement `firestore:"movements" json:"movements"`
+	Rest      string     `firestore:"rest" json:"rest"`
+}
+
+type ExerciseBlock struct {
+	Sets []WorkoutSet `firestore:"sets" json:"sets"`
+}
+
 type WorkoutPlanResponse struct {
-	Name      string           `json:"name"`
-	Exercises []ExerciseDetail `json:"exercises"`
+	Name      string          `json:"name"`
+	Exercises []ExerciseBlock `json:"exercises"`
 }
 
 // authMiddleware gələn sorğulardakı Firebase ID Token-i yoxlayır
@@ -275,103 +287,146 @@ func getWorkoutPlanHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Workout Name: %s", workoutName)
 
-	// 2. Hərəkətlərin siyahısını alırıq
+	// 2. Hərəkətlərin siyahısını alırıq (NEW STRUCTURE)
+	// Structure is: exercises (array) -> sets (array) -> movements (array)
 	rawExercises, ok := planData["exercises"].([]interface{})
 	if !ok {
-		// Ola bilər exercises sahəsi yoxdur
 		log.Println("Warning: 'exercises' field is missing or not an array")
 		rawExercises = []interface{}{}
 	}
-	log.Printf("Found %d exercises in plan", len(rawExercises))
+	log.Printf("Found %d exercise blocks in plan", len(rawExercises))
 
-	var detailedExercises []ExerciseDetail
+	var detailedBlocks []ExerciseBlock
 
-	// 3. Hər bir hərəkət üçün 'workouts' kolleksiyasından detalları çəkirik
-	for i, rawEx := range rawExercises {
-		exMap, ok := rawEx.(map[string]interface{})
+	// Iterate over Blocks
+	for i, rawBlock := range rawExercises {
+		blockMap, ok := rawBlock.(map[string]interface{})
 		if !ok {
+			log.Printf("Block #%d is not a map, skipping", i)
+			continue
+		}
+		
+		rawSets, ok := blockMap["sets"].([]interface{})
+		if !ok {
+			log.Printf("Block #%d has no valid sets, skipping", i)
 			continue
 		}
 
-		exName, _ := exMap["name"].(string)
-		log.Printf("Processing exercise #%d: %s", i, exName)
-		
-		if exName == "" {
-			continue
-		}
+		var detailedSets []WorkoutSet
 
-		// Plandan gələn reps/sets
-		reps := exMap["reps"]
-		sets := exMap["sets"]
+		// Iterate over Sets
+		for _, rawSet := range rawSets {
+			setMap, ok := rawSet.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			
+			label, _ := setMap["label"].(string)
+			rest, _ := setMap["rest"].(string) // or int to string conversion if needed
+			
+			rawMovements, ok := setMap["movements"].([]interface{})
+			if !ok {
+				continue
+			}
 
-		// Plandan gələn şəkil varsa, onu götürürük
-		planMainImage, _ := exMap["mainImage"].(string)
-		if planMainImage == "" {
-			planMainImage, _ = exMap["image"].(string)
-		}
+			var detailedMovements []Movement
 
-		// Detalları 'workouts' kolleksiyasından axtarırıq (name sahəsinə görə)
-		iter := firestoreClient.Collection("workouts").Where("name", "==", exName).Limit(1).Documents(ctx)
-		docSnaps, err := iter.GetAll()
-		
-		var detail ExerciseDetail
-		
-		if err == nil && len(docSnaps) > 0 {
-			// Detalları tapdıq
-			if err := docSnaps[0].DataTo(&detail); err != nil {
-				log.Printf("Error parsing exercise detail for %s: %v", exName, err)
-			} else {
-				log.Printf("Fetched details for %s (VideoURL present: %v)", exName, detail.VideoURL != "")
-				
-				// Clean all URL fields
-				detail.VideoURL = cleanString(detail.VideoURL)
-				detail.MainImage = cleanString(detail.MainImage)
-				detail.ImageURL = cleanString(detail.ImageURL)
+			// Iterate over Movements
+			for _, rawMov := range rawMovements {
+				movMap, ok := rawMov.(map[string]interface{})
+				if !ok {
+					continue
+				}
 
-				// Clean muscle group images
-				if len(detail.MuscleGroups) > 0 {
-					for i, mg := range detail.MuscleGroups {
-						if mg.ImageURL != "" {
-							detail.MuscleGroups[i].ImageURL = cleanString(mg.ImageURL)
+				exName, _ := movMap["name"].(string)
+				exId, _ := movMap["exerciseId"].(string)
+				category, _ := movMap["category"].(string)
+				reps := movMap["reps"]
+				setsCount := movMap["setsCount"]
+
+				log.Printf("Processing movement: %s (ID: %s)", exName, exId)
+
+				// Fetch details from 'workouts' collection
+				// Try by ID first if available
+				var detail Movement // Reuse Movement struct for temp storage of details
+				var docSnaps []*firestore.DocumentSnapshot
+
+				if exId != "" {
+					docSnap, err := firestoreClient.Collection("workouts").Doc(exId).Get(ctx)
+					if err == nil && docSnap.Exists() {
+						docSnaps = []*firestore.DocumentSnapshot{docSnap}
+					}
+				}
+
+				// Fallback to name search if ID failed
+				if len(docSnaps) == 0 && exName != "" {
+					iter := firestoreClient.Collection("workouts").Where("name", "==", exName).Limit(1).Documents(ctx)
+					docSnaps, _ = iter.GetAll()
+				}
+
+				if len(docSnaps) > 0 {
+					// Map fields manually or use DataTo with a compatible struct
+					// Using a temp struct or map to avoid overwriting existing Movement struct if types differ slightly
+					// But let's assume 'workouts' doc matches closely enough or we map manually
+					data := docSnaps[0].Data()
+					
+					// Extract details
+					if val, ok := data["videoUrl"].(string); ok { detail.VideoURL = cleanString(val) }
+					if val, ok := data["mainImage"].(string); ok { detail.MainImage = cleanString(val) }
+					if val, ok := data["imageUrl"].(string); ok { detail.ImageURL = cleanString(val) }
+					if val, ok := data["instructions"].(string); ok { detail.Instructions = val }
+					
+					// Muscle Groups
+					if mgRaw, ok := data["muscleGroups"].([]interface{}); ok {
+						for _, mgItem := range mgRaw {
+							if mgMap, ok := mgItem.(map[string]interface{}); ok {
+								name, _ := mgMap["name"].(string)
+								img, _ := mgMap["imageUrl"].(string)
+								detail.MuscleGroups = append(detail.MuscleGroups, MuscleGroup{Name: name, ImageURL: cleanString(img)})
+							}
 						}
 					}
 				}
+
+				// Construct final movement
+				finalMov := Movement{
+					Category:     category,
+					ExerciseID:   exId,
+					Name:         exName,
+					Reps:         reps,
+					SetsCount:    setsCount,
+					VideoURL:     detail.VideoURL,
+					MuscleGroups: detail.MuscleGroups,
+					MainImage:    detail.MainImage,
+					ImageURL:     detail.ImageURL,
+					Instructions: detail.Instructions,
+				}
+				
+				// Fallback for image if not in detailed fetch but in plan (custom uploaded)
+				if planImg, ok := movMap["image"].(string); ok && planImg != "" {
+					finalMov.ImageURL = planImg
+					finalMov.MainImage = planImg
+				}
+
+				detailedMovements = append(detailedMovements, finalMov)
 			}
-		} else {
-			log.Printf("No details found in 'workouts' collection for exercise: %s", exName)
-		}
-
-		// Merge logic: Plan data overrides template data if present, otherwise use template
-		finalDetail := ExerciseDetail{
-			Name:         exName,
-			Reps:         reps,
-			Sets:         sets,
-			VideoURL:     detail.VideoURL,
-			MuscleGroups: detail.MuscleGroups,
-			MainImage:    detail.MainImage,
-			ImageURL:     detail.ImageURL,
-			Instructions: detail.Instructions,
-		}
-
-		// Əgər planda şəkil varsa, ondan istifadə et
-		if planMainImage != "" {
-			finalDetail.MainImage = planMainImage
-			finalDetail.ImageURL = planMainImage // Fallback update too
+			
+			detailedSets = append(detailedSets, WorkoutSet{
+				Label:     label,
+				Rest:      rest,
+				Movements: detailedMovements,
+			})
 		}
 		
-		// Əgər planda reps/sets yoxdursa və template-də varsa, ondan istifadə et
-		if finalDetail.Reps == nil { finalDetail.Reps = detail.Reps }
-		if finalDetail.Sets == nil { finalDetail.Sets = detail.Sets }
-
-		detailedExercises = append(detailedExercises, finalDetail)
+		detailedBlocks = append(detailedBlocks, ExerciseBlock{Sets: detailedSets})
 	}
 
 	response := WorkoutPlanResponse{
 		Name:      workoutName,
-		Exercises: detailedExercises,
+		Exercises: detailedBlocks,
 	}
 
-	log.Printf("Sending response with %d exercises", len(detailedExercises))
+	log.Printf("Sending response with %d exercise blocks", len(detailedBlocks))
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("JSON encode error: %v", err)

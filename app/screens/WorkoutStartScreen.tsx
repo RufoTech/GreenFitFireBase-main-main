@@ -87,7 +87,7 @@ export default function WorkoutStartScreen() {
                     <View style={styles.badge}>
                         <Text style={styles.badgeText}>TODAY'S GOAL</Text>
                     </View>
-                    <Text style={styles.heroTitle}>Ready to start your workout?</Text>
+                    <Text style={styles.heroTitle}>ReaSSdy to start your workout?</Text>
                 </View>
             </ImageBackground>
         </View>

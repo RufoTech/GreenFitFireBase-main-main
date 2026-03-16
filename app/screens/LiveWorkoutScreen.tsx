@@ -7,9 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  Image,
   ImageBackground,
-  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -33,22 +31,37 @@ const SUBTEXT_COLOR = "#94a3b8";
 // API URL - Android Emulator üçün 10.0.2.2, digərləri üçün localhost
 const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
 
-interface ExerciseDetail {
+// Updated interfaces to match new structure
+interface Movement {
+  category: string;
+  exerciseId: string;
   name: string;
-  reps: string | number;
-  sets: string | number;
+  reps: string;
+  setsCount: number;
+  image?: string;
   videoUrl?: string;
-  muscleGroups?: { name: string; imageUrl: string }[];
-  mainImage?: string;
-  imageUrl?: string;
   instructions?: string;
+  muscleGroups?: { name: string; imageUrl: string }[]; // Optional, might need to fetch separately if not in initial load
 }
 
-interface WorkoutPlanItem {
-  name: string;
-  reps: string | number;
-  sets: string | number;
-  // This might contain only basic info, details need to be fetched from 'workouts' collection
+interface WorkoutSet {
+  label: string;
+  movements: Movement[];
+  rest: string;
+}
+
+interface ExerciseBlock {
+  sets: WorkoutSet[];
+}
+
+interface FlattenedExerciseItem {
+    movement: Movement;
+    setLabel: string;
+    blockIndex: number;
+    setIndex: number;
+    movementIndex: number;
+    totalSets: number;
+    currentSetNumber: number; // e.g. Set 1 of 4
 }
 
 export default function LiveWorkoutScreen() {
@@ -58,7 +71,16 @@ export default function LiveWorkoutScreen() {
   
   const [loading, setLoading] = useState(true);
   const [workoutName, setWorkoutName] = useState("");
-  const [exercises, setExercises] = useState<ExerciseDetail[]>([]);
+  
+  // We need to flatten the nested structure into a linear list of "steps" for the live workout
+  // Or handle it hierarchically. Linear is usually better for "Next/Prev" flow.
+  // But we might want to group them by sets.
+  // Let's flatten it: Each item in the array represents one "Set" of an exercise.
+  // If an exercise has 4 sets, it will appear 4 times? 
+  // Or we keep it as "Current Exercise" and track "Current Set".
+  // The previous implementation had "currentIndex" pointing to an exercise.
+  // Let's flatten to (Exercise + Set Number) so user clicks "Next" after each set.
+  const [flatWorkoutQueue, setFlatWorkoutQueue] = useState<FlattenedExerciseItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isMuscleModalVisible, setIsMuscleModalVisible] = useState(false);
 
@@ -105,7 +127,6 @@ export default function LiveWorkoutScreen() {
 
       console.log("Getting ID token...");
       const token = await user.getIdToken();
-      console.log("Token received (truncated):", token.substring(0, 20) + "...");
       
       const url = `${API_URL}/api/workout-plan?workoutId=${workoutId}`;
       console.log(`Fetching workout plan from Go API: ${url}`);
@@ -118,32 +139,56 @@ export default function LiveWorkoutScreen() {
           }
       });
 
-      console.log("Response status:", response.status);
-      console.log("Response headers:", JSON.stringify(response.headers, null, 2));
-
       if (!response.ok) {
-          const errorText = await response.text();
-          console.error("HTTP Error Body:", errorText);
           throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log("Workout Plan Received from Go API:", JSON.stringify(data, null, 2));
+      console.log("Workout Plan Received");
       
       setWorkoutName(data.name || "Workout");
-      setExercises(data.exercises || []);
+
+      // Flatten the structure
+      const exercises: ExerciseBlock[] = data.exercises || [];
+      const queue: FlattenedExerciseItem[] = [];
+
+      exercises.forEach((block, bIdx) => {
+        block.sets.forEach((set, sIdx) => {
+            set.movements.forEach((movement, mIdx) => {
+                // For each movement, we add it to the queue.
+                // If the movement has multiple sets (setsCount > 1), do we add it multiple times?
+                // Usually in a live workout app, yes, or we have a counter on the screen.
+                // Let's add it multiple times so "Next" advances the set.
+                // Or better: Keep one item but have internal state for "Current Set".
+                // But simpler for navigation is to flatten everything.
+                const setsCount = movement.setsCount || 1;
+                for (let i = 1; i <= setsCount; i++) {
+                    queue.push({
+                        movement: movement,
+                        setLabel: set.label,
+                        blockIndex: bIdx,
+                        setIndex: sIdx,
+                        movementIndex: mIdx,
+                        totalSets: setsCount,
+                        currentSetNumber: i
+                    });
+                }
+            });
+        });
+      });
+
+      setFlatWorkoutQueue(queue);
 
     } catch (error) {
-      console.error("Error fetching live workout data via Go API:", error);
-      Alert.alert("Error", "Failed to load workout data. Please check your backend.");
+      console.error("Error fetching live workout data:", error);
+      Alert.alert("Error", "Failed to load workout data.");
     } finally {
-      console.log("fetchWorkoutData FINISHED - Setting loading to false");
       setLoading(false);
     }
   };
 
   const handleNext = () => {
-    if (currentIndex < exercises.length - 1) {
+    if (currentIndex < flatWorkoutQueue.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
       Alert.alert("Workout Complete", "Great job! You've finished the workout.", [
@@ -166,7 +211,7 @@ export default function LiveWorkoutScreen() {
     );
   }
 
-  if (exercises.length === 0) {
+  if (flatWorkoutQueue.length === 0) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ color: TEXT_COLOR }}>No exercises found for this workout.</Text>
@@ -177,23 +222,16 @@ export default function LiveWorkoutScreen() {
     );
   }
 
-  // Helper to clean any URL
-  const cleanUrl = (url: string | undefined) => {
-    if (!url) return null;
-    return url.replace(/[`"'\s]/g, "");
-  };
-
-  const currentExercise = exercises[currentIndex];
-  const progressPercent = Math.round((currentIndex / exercises.length) * 100);
+  const currentItem = flatWorkoutQueue[currentIndex];
+  const currentExercise = currentItem.movement;
+  const progressPercent = Math.round(((currentIndex + 1) / flatWorkoutQueue.length) * 100);
   
   const videoId = currentExercise.videoUrl ? getYoutubeId(currentExercise.videoUrl) : null;
-  const mainImage = cleanUrl(currentExercise.mainImage);
+  const mainImage = currentExercise.image; // Already cleaned/processed in backend or consistent
   
-  // Get target muscle image (first one)
-  const targetMuscleImage = currentExercise.muscleGroups && currentExercise.muscleGroups.length > 0 
-      ? cleanUrl(currentExercise.muscleGroups[0].imageUrl)
-      : null;
-
+  // Use category as muscle group fallback if muscleGroups missing
+  const muscleName = currentExercise.category; 
+  
   // Create Plyr HTML
   const plyrHTML = `
     <!DOCTYPE html>
@@ -308,6 +346,13 @@ export default function LiveWorkoutScreen() {
             )}
         </View>
 
+        {/* Set Info Banner */}
+        <View style={styles.setInfoBanner}>
+            <Text style={styles.setInfoText}>
+                {currentItem.setLabel} • Set {currentItem.currentSetNumber} of {currentItem.totalSets}
+            </Text>
+        </View>
+
         {/* Exercise Title & Tip */}
         <View style={styles.exerciseHeader}>
             <Text style={styles.exerciseTitle}>{currentExercise.name.toUpperCase()}</Text>
@@ -318,55 +363,37 @@ export default function LiveWorkoutScreen() {
         <View style={styles.statsGrid}>
             <View style={styles.statCard}>
                 <Text style={styles.statLabel}>REPS</Text>
-                <Text style={styles.statValue}>{currentExercise.reps}</Text>
+                <Text style={styles.statValue}>{currentExercise.reps || "-"}</Text>
             </View>
             <View style={styles.statCard}>
-                <Text style={styles.statLabel}>SETS</Text>
+                <Text style={styles.statLabel}>SET</Text>
                 <View style={styles.setsValueContainer}>
-                    <Text style={[styles.statValue, { color: PRIMARY }]}>{currentExercise.sets}</Text>
+                    <Text style={[styles.statValue, { color: PRIMARY }]}>{currentItem.currentSetNumber}</Text>
+                    <Text style={[styles.statValue, { fontSize: 20, color: SUBTEXT_COLOR }]}>/{currentItem.totalSets}</Text>
                 </View>
             </View>
         </View>
 
-        {/* Muscle Map Section */}
-        {currentExercise.muscleGroups && currentExercise.muscleGroups.length > 0 && (
-            <TouchableOpacity 
-                activeOpacity={0.8}
-                onPress={() => setIsMuscleModalVisible(true)}
-                style={styles.muscleMapCard}
-            >
-                <View style={styles.muscleMapCardHeader}>
-                    <View style={styles.muscleMapContainer}>
-                        {targetMuscleImage ? (
-                             <Image 
-                                source={{ uri: targetMuscleImage }}
-                                style={styles.muscleMapImage}
-                                resizeMode="contain"
-                            />
-                        ) : (
-                            <MaterialIcons name="accessibility" size={60} color="rgba(255,255,255,0.4)" />
-                        )}
-                    </View>
-                    <View style={styles.muscleInfo}>
-                        <Text style={styles.muscleInfoTitle}>Target Muscles</Text>
-                        <View style={styles.muscleTags}>
-                            {currentExercise.muscleGroups.map((muscle, idx) => (
-                                <View key={idx} style={[styles.muscleTag, { backgroundColor: idx === 0 ? PRIMARY : '#1e293b' }]}>
-                                    <Text style={[styles.muscleTagText, { color: idx === 0 ? BG_DARK : '#94a3b8' }]}>
-                                        {muscle.name.toUpperCase()}
-                                    </Text>
-                                </View>
-                            ))}
+        {/* Muscle Info Section (Simplified if no image) */}
+        <View style={styles.muscleMapCard}>
+            <View style={styles.muscleMapCardHeader}>
+                <View style={styles.muscleMapContainer}>
+                     <MaterialIcons name="accessibility" size={60} color="rgba(255,255,255,0.4)" />
+                </View>
+                <View style={styles.muscleInfo}>
+                    <Text style={styles.muscleInfoTitle}>Target Muscles</Text>
+                    <View style={styles.muscleTags}>
+                        <View style={[styles.muscleTag, { backgroundColor: PRIMARY }]}>
+                            <Text style={[styles.muscleTagText, { color: BG_DARK }]}>
+                                {muscleName.toUpperCase()}
+                            </Text>
                         </View>
                     </View>
-                    <View style={styles.infoIconContainer}>
-                        <MaterialIcons name="info-outline" size={24} color={PRIMARY} />
-                    </View>
                 </View>
-            </TouchableOpacity>
-        )}
+            </View>
+        </View>
 
-        {/* Workout List Section */}
+        {/* Workout List Section (Up Next) */}
         <View style={styles.workoutListSection}>
             <TouchableOpacity 
                 style={styles.workoutListHeader}
@@ -374,35 +401,41 @@ export default function LiveWorkoutScreen() {
             >
                 <View style={styles.workoutListTitleContainer}>
                     <MaterialIcons name="list-alt" size={20} color={PRIMARY} />
-                    <Text style={styles.workoutListTitle}>WORKOUT LIST</Text>
+                    <Text style={styles.workoutListTitle}>UP NEXT</Text>
                 </View>
                 <MaterialIcons name={isExpanded ? "expand-less" : "expand-more"} size={24} color={PRIMARY} />
             </TouchableOpacity>
 
             {isExpanded && (
                 <View style={styles.workoutList}>
-                    {exercises.map((ex, index) => {
-                        const isActive = index === currentIndex;
-                        const isPast = index < currentIndex;
-                        
+                    {flatWorkoutQueue.slice(currentIndex + 1, currentIndex + 6).map((item, index) => {
                         return (
-                            <TouchableOpacity 
+                            <View 
                                 key={index} 
-                                style={isActive ? styles.activeListItem : styles.listItem}
-                                onPress={() => setCurrentIndex(index)}
+                                style={styles.listItem}
                             >
                                 <View style={styles.listItemLeft}>
-                                    <View style={isActive ? styles.activeDot : styles.inactiveDot} />
-                                    <Text style={isActive ? styles.activeListItemText : styles.listItemText}>
-                                        {ex.name}
-                                    </Text>
+                                    <View style={styles.inactiveDot} />
+                                    <View>
+                                        <Text style={styles.listItemText}>
+                                            {item.movement.name}
+                                        </Text>
+                                        <Text style={styles.listItemSubText}>
+                                            {item.setLabel} • Set {item.currentSetNumber}/{item.totalSets}
+                                        </Text>
+                                    </View>
                                 </View>
-                                <Text style={isActive ? styles.activeListItemMeta : styles.listItemMeta}>
-                                    {ex.sets} x {ex.reps}
+                                <Text style={styles.listItemMeta}>
+                                    {item.movement.reps} reps
                                 </Text>
-                            </TouchableOpacity>
+                            </View>
                         );
                     })}
+                    {flatWorkoutQueue.length - currentIndex - 6 > 0 && (
+                        <Text style={{ color: SUBTEXT_COLOR, textAlign: 'center', marginTop: 8 }}>
+                            + {flatWorkoutQueue.length - currentIndex - 6} more sets
+                        </Text>
+                    )}
                 </View>
             )}
         </View>
@@ -424,56 +457,12 @@ export default function LiveWorkoutScreen() {
             
             <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
                 <Text style={styles.nextButtonText}>
-                    {currentIndex === exercises.length - 1 ? "Finish" : "Next"}
+                    {currentIndex === flatWorkoutQueue.length - 1 ? "Finish" : "Next Set"}
                 </Text>
-                <MaterialIcons name={currentIndex === exercises.length - 1 ? "check" : "arrow-forward"} size={20} color={BG_DARK} />
+                <MaterialIcons name={currentIndex === flatWorkoutQueue.length - 1 ? "check" : "arrow-forward"} size={20} color={BG_DARK} />
             </TouchableOpacity>
         </View>
       </View>
-
-      {/* Muscle Detail Modal */}
-      <Modal
-        visible={isMuscleModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setIsMuscleModalVisible(false)}
-      >
-        <TouchableOpacity 
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setIsMuscleModalVisible(false)}
-        >
-            <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Target Muscles</Text>
-                    <TouchableOpacity onPress={() => setIsMuscleModalVisible(false)}>
-                        <MaterialIcons name="close" size={24} color={TEXT_COLOR} />
-                    </TouchableOpacity>
-                </View>
-                
-                {targetMuscleImage && (
-                    <View style={styles.modalImageContainer}>
-                        <Image 
-                            source={{ uri: targetMuscleImage }}
-                            style={styles.modalImage}
-                            resizeMode="contain"
-                        />
-                    </View>
-                )}
-
-                <View style={styles.modalMuscleList}>
-                    {currentExercise.muscleGroups && currentExercise.muscleGroups.map((muscle, idx) => (
-                        <View key={idx} style={styles.modalMuscleItem}>
-                            <View style={[styles.modalDot, { backgroundColor: idx === 0 ? PRIMARY : SUBTEXT_COLOR }]} />
-                            <Text style={[styles.modalMuscleText, { color: idx === 0 ? PRIMARY : TEXT_COLOR }]}>
-                                {muscle.name}
-                            </Text>
-                        </View>
-                    ))}
-                </View>
-            </View>
-        </TouchableOpacity>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -553,7 +542,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1e293b',
     borderWidth: 1,
     borderColor: 'rgba(51, 65, 85, 0.5)',
-    marginBottom: 24,
+    marginBottom: 16,
     position: 'relative',
   },
   videoWrapper: {
@@ -582,24 +571,6 @@ const styles = StyleSheet.create({
   },
   videoOverlay: {
     ...StyleSheet.absoluteFillObject,
-  },
-  playButtonContainer: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(204, 255, 0, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
   videoControls: {
     position: 'absolute',
@@ -646,6 +617,23 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  setInfoBanner: {
+    backgroundColor: 'rgba(204, 255, 0, 0.1)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignSelf: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.2)',
+  },
+  setInfoText: {
+    color: PRIMARY,
+    fontSize: 12,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   exerciseHeader: {
     alignItems: 'center',
@@ -712,11 +700,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 24,
   },
-  infoIconContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 4,
-  },
   muscleMapContainer: {
     width: 80,
     height: 100,
@@ -726,18 +709,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  muscleMapImage: {
-    width: '100%',
-    height: '100%',
-  },
-  highlight: {
-    position: 'absolute',
-    width: 16,
-    height: 24,
-    backgroundColor: 'rgba(204, 255, 0, 0.4)',
-    borderRadius: 999,
-    blurRadius: 4,
   },
   muscleInfo: {
     flex: 1,
@@ -761,61 +732,6 @@ const styles = StyleSheet.create({
   muscleTagText: {
     fontSize: 10,
     fontWeight: 'bold',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    width: '100%',
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: TEXT_COLOR,
-  },
-  modalImageContainer: {
-    width: '100%',
-    aspectRatio: 1,
-    backgroundColor: '#0f172a',
-    borderRadius: 12,
-    marginBottom: 24,
-    overflow: 'hidden',
-  },
-  modalImage: {
-    width: '100%',
-    height: '100%',
-  },
-  modalMuscleList: {
-    gap: 12,
-  },
-  modalMuscleItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  modalDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  modalMuscleText: {
-    fontSize: 16,
-    fontWeight: '500',
   },
   workoutListSection: {
     marginTop: 8,
@@ -841,37 +757,6 @@ const styles = StyleSheet.create({
   workoutList: {
     gap: 12,
   },
-  activeListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: 'rgba(204, 255, 0, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.3)',
-    borderRadius: 12,
-  },
-  listItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  activeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: PRIMARY,
-  },
-  activeListItemText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  activeListItemMeta: {
-    color: PRIMARY,
-    fontSize: 12,
-    fontWeight: '900',
-  },
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -881,6 +766,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(51, 65, 85, 0.5)',
     borderRadius: 12,
+  },
+  listItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   inactiveDot: {
     width: 8,
@@ -892,6 +782,11 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  listItemSubText: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 2,
   },
   listItemMeta: {
     color: '#94a3b8',
@@ -905,7 +800,7 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 24,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    backgroundColor: BG_DARK, // Or gradient if possible
+    backgroundColor: BG_DARK,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
