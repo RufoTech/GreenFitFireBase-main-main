@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Image,
   ImageBackground,
   Platform,
   SafeAreaView,
@@ -84,6 +85,7 @@ export default function LiveWorkoutScreen() {
   const [flatWorkoutQueue, setFlatWorkoutQueue] = useState<FlattenedExerciseItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isMuscleModalVisible, setIsMuscleModalVisible] = useState(false);
+  const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
     fetchWorkoutData();
@@ -335,9 +337,15 @@ export default function LiveWorkoutScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        {/* Exercise Video/Animation Area */}
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+        onScroll={(event) => {
+            const offsetY = event.nativeEvent.contentOffset.y;
+            setScrollY(offsetY);
+        }}
+        scrollEventThrottle={16}
+      >
         <View style={styles.videoContainer}>
             {videoId ? (
                 <View style={styles.videoWrapper}>
@@ -415,7 +423,13 @@ export default function LiveWorkoutScreen() {
         </View>
 
         {/* Muscle Info Section (Simplified if no image) */}
-        <View style={styles.muscleMapCard}>
+        <TouchableOpacity 
+            style={styles.muscleMapCard}
+            onPress={() => {
+                // Just toggle visibility, layout will handle centering
+                setIsMuscleModalVisible(true);
+            }}
+        >
             <View style={styles.muscleMapCardHeader}>
                 <View style={styles.muscleMapContainer}>
                      {targetMuscleImage ? (
@@ -429,7 +443,10 @@ export default function LiveWorkoutScreen() {
                      )}
                 </View>
                 <View style={styles.muscleInfo}>
-                    <Text style={styles.muscleInfoTitle}>Target Muscles</Text>
+                    <View style={styles.muscleInfoHeader}>
+                        <Text style={styles.muscleInfoTitle}>Target Muscles</Text>
+                        <MaterialIcons name="info-outline" size={20} color={PRIMARY} />
+                    </View>
                     <View style={styles.muscleTags}>
                         <View style={[styles.muscleTag, { backgroundColor: PRIMARY }]}>
                             <Text style={[styles.muscleTagText, { color: BG_DARK }]}>
@@ -439,7 +456,49 @@ export default function LiveWorkoutScreen() {
                     </View>
                 </View>
             </View>
-        </View>
+        </TouchableOpacity>
+
+        {/* Muscle Info Modal - Custom Implementation */}
+        {isMuscleModalVisible && (
+            <TouchableOpacity 
+                style={styles.modalOverlayAbsolute} 
+                activeOpacity={1} 
+                onPress={() => setIsMuscleModalVisible(false)}
+            >
+                <TouchableOpacity 
+                    activeOpacity={1} 
+                    onPress={() => {}} // Prevent close when clicking content
+                    // Position modal relative to current scroll + half screen height to center in viewport
+                    style={[styles.modalContent, { marginTop: scrollY + 100 }]}
+                >
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Target Muscles</Text>
+                        <TouchableOpacity onPress={() => setIsMuscleModalVisible(false)}>
+                            <MaterialIcons name="close" size={24} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
+                    
+                    <View style={styles.modalBody}>
+                        <View style={styles.modalImageContainer}>
+                             {targetMuscleImage ? (
+                                <Image 
+                                    source={{ uri: targetMuscleImage }} 
+                                    style={styles.modalImage}
+                                    resizeMode="contain"
+                                />
+                             ) : (
+                                <MaterialIcons name="accessibility" size={100} color={PRIMARY} />
+                             )}
+                        </View>
+                        <Text style={styles.modalMuscleName}>{targetMuscleName}</Text>
+                        <Text style={styles.modalDescription}>
+                            This exercise primarily targets the {targetMuscleName.toLowerCase()}. 
+                            Focus on feeling the contraction in this area during the movement.
+                        </Text>
+                    </View>
+                </TouchableOpacity>
+            </TouchableOpacity>
+        )}
 
         {/* Workout List Section (Full List) */}
         <View style={styles.workoutListSection}>
@@ -811,11 +870,16 @@ const styles = StyleSheet.create({
   muscleInfo: {
     flex: 1,
   },
+  muscleInfoHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+  },
   muscleInfoTitle: {
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
-    marginBottom: 8,
   },
   muscleTags: {
     flexDirection: 'row',
@@ -830,6 +894,61 @@ const styles = StyleSheet.create({
   muscleTagText: {
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  modalOverlayAbsolute: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    zIndex: 9999,
+  },
+  modalContent: {
+      width: '100%',
+      maxWidth: 400,
+      backgroundColor: '#1e293b',
+      borderRadius: 16,
+      overflow: 'hidden',
+  },
+  modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  modalTitle: {
+      color: '#fff',
+      fontSize: 18,
+      fontWeight: 'bold',
+  },
+  modalBody: {
+      padding: 24,
+      alignItems: 'center',
+  },
+  modalImageContainer: {
+      width: 200,
+      height: 200,
+      marginBottom: 16,
+      justifyContent: 'center',
+      alignItems: 'center',
+  },
+  modalImage: {
+      width: '100%',
+      height: '100%',
+  },
+  modalMuscleName: {
+      color: PRIMARY,
+      fontSize: 24,
+      fontWeight: 'bold',
+      marginBottom: 12,
+      textTransform: 'uppercase',
+  },
+  modalDescription: {
+      color: '#cbd5e1',
+      fontSize: 14,
+      textAlign: 'center',
+      lineHeight: 20,
   },
   workoutListSection: {
     marginTop: 8,
