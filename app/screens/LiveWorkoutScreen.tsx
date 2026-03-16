@@ -86,6 +86,7 @@ export default function LiveWorkoutScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isMuscleModalVisible, setIsMuscleModalVisible] = useState(false);
   const [scrollY, setScrollY] = useState(0);
+  const [completedRestBlocks, setCompletedRestBlocks] = useState<string[]>([]); // Track completed rests by block index
 
   useEffect(() => {
     fetchWorkoutData();
@@ -220,6 +221,64 @@ export default function LiveWorkoutScreen() {
   };
 
   const handleNext = () => {
+    // Check if there is a rest timer for the current block/set
+    const currentItem = flatWorkoutQueue[currentIndex];
+    const currentSet = rawExercises[currentItem.blockIndex]?.sets[currentItem.setIndex];
+    const restDuration = currentSet?.rest ? parseInt(currentSet.rest, 10) : 0;
+    
+    // Unique ID for this specific rest moment (Block + Set)
+    const restId = `${currentItem.blockIndex}-${currentItem.setIndex}`;
+
+    // Logic: Trigger rest ONLY if:
+    // 1. There is a rest duration > 0
+    // 2. We are at the LAST movement of the current set (if a set has multiple movements/supersets)
+    // 3. This rest hasn't been completed yet
+    
+    // Check if we are at the last movement of this set
+    const isLastMovementInSet = currentItem.movementIndex === (currentSet?.movements.length || 1) - 1;
+    
+    // BUT user said: "rest time ekrani hansi blockun icinde bir defe acildisa artiq complated ✔️ olacaq ve birde acilmayacaq"
+    // This implies one rest per BLOCK? Or per Set? usually it's per set.
+    // "hansi blockun icinde bir defe acildisa" -> "if opened once inside a block". 
+    // This might mean if a block has 3 sets, and we rest after set 1, we don't rest after set 2?
+    // OR it means "If we already did the rest for Set 1, don't show it again if we go back and forth".
+    // Let's assume the latter (don't show again for the same ID).
+    
+    if (restDuration > 0 && isLastMovementInSet && !completedRestBlocks.includes(restId)) {
+        // Mark as completed immediately (or pass a callback to mark it after timer)
+        setCompletedRestBlocks(prev => [...prev, restId]);
+        
+        // Prepare next exercise data
+        let nextItem = null;
+        if (currentIndex < flatWorkoutQueue.length - 1) {
+            nextItem = flatWorkoutQueue[currentIndex + 1];
+        }
+        
+        router.push({
+            pathname: '/screens/RestTimerScreen',
+            params: {
+                duration: restDuration.toString(),
+                nextExerciseName: nextItem ? nextItem.movement.name : "Workout Complete",
+                nextExerciseSet: nextItem ? `Set ${nextItem.currentSetNumber} / ${nextItem.totalSets}` : "-",
+                nextExerciseImage: nextItem ? (nextItem.movement.image || "") : "",
+                nextExerciseReps: nextItem ? nextItem.movement.reps : "-"
+            }
+        });
+        
+        // Advance to next step after navigating
+        if (currentIndex < flatWorkoutQueue.length - 1) {
+            setCurrentIndex(prev => prev + 1);
+        } else {
+             // If it was the last exercise but had a rest (rare), finish after rest?
+             // Usually rest is between sets.
+             // We'll just finish workout if no next item.
+             Alert.alert("Workout Complete", "Great job! You've finished the workout.", [
+                { text: "Finish", onPress: () => router.back() }
+              ]);
+        }
+        return;
+    }
+
     if (currentIndex < flatWorkoutQueue.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
@@ -586,6 +645,9 @@ export default function LiveWorkoutScreen() {
                                             <View style={styles.restContainer}>
                                                 <MaterialIcons name="timer" size={16} color={PRIMARY} />
                                                 <Text style={styles.restText}>Rest: {set.rest}s</Text>
+                                                {completedRestBlocks.includes(`${blockIndex}-${setIndex}`) && (
+                                                    <MaterialIcons name="check-circle" size={16} color={PRIMARY} style={{ marginLeft: 4 }} />
+                                                )}
                                             </View>
                                         ) : null}
                                     </View>
