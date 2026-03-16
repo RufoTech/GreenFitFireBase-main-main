@@ -3,7 +3,7 @@ import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -20,20 +20,34 @@ import {
   TouchableWithoutFeedback,
   View
 } from 'react-native';
+import { SelectionStore } from '../utils/SelectionStore';
 
 const { width } = Dimensions.get('window');
 
-interface Exercise {
-  id: string;
+// Interfaces matching WorkoutDetailsScreen structure
+interface Movement {
+  _id: string; // Internal unique ID for UI handling
+  category: string;
+  exerciseId: string;
   name: string;
-  mainImage: string;
-  reps?: string;
-  sets?: string;
-  type?: string;
+  reps: string;
+  setsCount: number;
+  image?: string;
+  videoUrl?: string;
+  instructions?: string;
 }
 
-import { useFocusEffect } from 'expo-router';
-import { SelectionStore } from '../utils/SelectionStore';
+interface WorkoutSet {
+  _id: string; // Internal ID
+  label: string;
+  movements: Movement[];
+  rest: string;
+}
+
+interface ExerciseBlock {
+  _id: string; // Internal ID
+  sets: WorkoutSet[];
+}
 
 export default function CreateCustomWorkoutScreen() {
   const router = useRouter();
@@ -43,40 +57,72 @@ export default function CreateCustomWorkoutScreen() {
   const [equipment, setEquipment] = useState('');
   const [targetMuscle, setTargetMuscle] = useState('');
   const [level, setLevel] = useState('');
+  const [coverImage, setCoverImage] = useState<string | null>(null);
+  
+  // Nested structure state
+  const [blocks, setBlocks] = useState<ExerciseBlock[]>([
+    {
+      _id: Math.random().toString(36).substr(2, 9),
+      sets: [
+        {
+          _id: Math.random().toString(36).substr(2, 9),
+          label: 'Set 1',
+          movements: [],
+          rest: '60'
+        }
+      ]
+    }
+  ]);
+
+  // Track where we are adding/replacing an exercise
+  const [selectionContext, setSelectionContext] = useState<{
+    blockIndex: number;
+    setIndex: number;
+    movementId?: string; // If replacing
+  } | null>(null);
+
   const [visibleDropdown, setVisibleDropdown] = useState<string | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{top: number, right: number} | null>(null);
-  const [coverImage, setCoverImage] = useState<string | null>(null);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
 
   // Check for selected exercise when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      const { data, action, targetId } = SelectionStore.getData();
+      const { data, action } = SelectionStore.getData();
       
-      if (data && action) {
-        // Standardize exercise object
-        const newExercise: Exercise = {
-          id: Math.random().toString(36).substr(2, 9),
+      if (data && action && selectionContext) {
+        const { blockIndex, setIndex, movementId } = selectionContext;
+
+        const newMovement: Movement = {
+          _id: Math.random().toString(36).substr(2, 9),
+          category: data.type || data.category || 'General',
+          exerciseId: data.id,
           name: data.name,
-          mainImage: data.mainImage || data.targetMuscleImage || 'https://via.placeholder.com/150',
-          reps: '',
-          sets: '',
-          type: data.type || data.category || 'General'
+          reps: data.reps || '10',
+          setsCount: data.sets ? parseInt(String(data.sets)) : 1,
+          image: data.mainImage || data.image || 'https://via.placeholder.com/150',
+          videoUrl: data.videoUrl || '',
+          instructions: data.instructions || ''
         };
 
-        if (action === 'add') {
-          setExercises(prev => [...prev, newExercise]);
-        } else if (action === 'replace' && targetId) {
-          // Keep the ID of the exercise being replaced if you want, or generate new. 
-          // If we want to replace the slot, better keep the old ID or just replace the object.
-          // Let's replace the object but keep the array structure.
-          setExercises(prev => prev.map(ex => ex.id === targetId ? { ...newExercise, id: targetId } : ex));
-        }
+        setBlocks(prevBlocks => {
+          const newBlocks = [...prevBlocks];
+          const targetSet = newBlocks[blockIndex].sets[setIndex];
+
+          if (action === 'add') {
+            targetSet.movements.push(newMovement);
+          } else if (action === 'replace' && movementId) {
+            targetSet.movements = targetSet.movements.map(m => 
+              m._id === movementId ? { ...newMovement, _id: movementId } : m // Keep old ID if replacing? No, new ID is fine or keep old.
+            );
+          }
+          return newBlocks;
+        });
         
-        // Clear store
+        // Clear store and context
         SelectionStore.clear();
+        setSelectionContext(null);
       }
-    }, [])
+    }, [selectionContext])
   );
 
   const pickImage = async () => {
@@ -92,44 +138,41 @@ export default function CreateCustomWorkoutScreen() {
     }
   };
 
-  const toggleDropdown = (id: string, event: any) => {
-    if (visibleDropdown === id) {
-      closeDropdown();
-    } else {
-      const { pageY } = event.nativeEvent;
-      // Adjust slightly to place below finger
-      setDropdownPosition({ top: pageY + 10, right: 16 });
-      setVisibleDropdown(id);
-    }
+  // --- Actions ---
+
+  const handleAddBlock = () => {
+    setBlocks(prev => [
+      ...prev,
+      {
+        _id: Math.random().toString(36).substr(2, 9),
+        sets: [
+          {
+            _id: Math.random().toString(36).substr(2, 9),
+            label: 'Set 1',
+            movements: [],
+            rest: '60'
+          }
+        ]
+      }
+    ]);
   };
 
-  const closeDropdown = () => {
-    setVisibleDropdown(null);
-  };
-
-  const handleReplace = (id: string) => {
-    // Delay closing to allow touch to register
-    requestAnimationFrame(() => {
-      closeDropdown();
-      router.push({
-        pathname: '/screens/WorkoutLibraryScreen',
-        params: { 
-          selectionMode: 'true',
-          returnTo: '/screens/CreateCustomWorkoutScreen',
-          replaceId: id
-        }
+  const handleAddSet = (blockIndex: number) => {
+    setBlocks(prev => {
+      const newBlocks = [...prev];
+      const currentSetsCount = newBlocks[blockIndex].sets.length;
+      newBlocks[blockIndex].sets.push({
+        _id: Math.random().toString(36).substr(2, 9),
+        label: `Set ${currentSetsCount + 1}`,
+        movements: [],
+        rest: '60'
       });
+      return newBlocks;
     });
   };
 
-  const handleDelete = (id: string) => {
-    requestAnimationFrame(() => {
-      closeDropdown();
-      setExercises(prev => prev.filter(ex => ex.id !== id));
-    });
-  };
-
-  const handleAddExercise = () => {
+  const handleAddMovement = (blockIndex: number, setIndex: number) => {
+    setSelectionContext({ blockIndex, setIndex });
     router.push({
       pathname: '/screens/WorkoutLibraryScreen',
       params: { 
@@ -139,18 +182,117 @@ export default function CreateCustomWorkoutScreen() {
     });
   };
 
-  const handleUpdateExercise = (id: string, field: 'sets' | 'reps', value: string) => {
-    setExercises(prev => prev.map(ex => 
-      ex.id === id ? { ...ex, [field]: value } : ex
-    ));
+  const handleReplaceMovement = (blockIndex: number, setIndex: number, movementId: string) => {
+    // Need to find indices, but since we pass them from render, it's easier.
+    // However, the dropdown is global. We need to store context in dropdown.
+    // For simplicity, let's just close dropdown and use the ID to find it?
+    // Actually, I can store the context when opening the dropdown.
+    // But current dropdown state only stores ID.
+    // Let's modify toggleDropdown to store context or find indices later.
+    
+    // Easier: Just set context and go. We need to find blockIndex/setIndex for this movementId.
+    // A helper function to find location by movementId would be good.
+    const location = findMovementLocation(movementId);
+    if (location) {
+      setSelectionContext({ ...location, movementId });
+      closeDropdown();
+      router.push({
+        pathname: '/screens/WorkoutLibraryScreen',
+        params: { 
+          selectionMode: 'true',
+          returnTo: '/screens/CreateCustomWorkoutScreen',
+          replaceId: movementId
+        }
+      });
+    }
   };
+
+  const handleDeleteMovement = (movementId: string) => {
+    setBlocks(prev => prev.map(block => ({
+      ...block,
+      sets: block.sets.map(set => ({
+        ...set,
+        movements: set.movements.filter(m => m._id !== movementId)
+      }))
+    })));
+    closeDropdown();
+  };
+
+  const findMovementLocation = (movementId: string) => {
+    for (let b = 0; b < blocks.length; b++) {
+      for (let s = 0; s < blocks[b].sets.length; s++) {
+        const found = blocks[b].sets[s].movements.find(m => m._id === movementId);
+        if (found) return { blockIndex: b, setIndex: s };
+      }
+    }
+    return null;
+  };
+
+  const handleUpdateMovement = (movementId: string, field: 'setsCount' | 'reps', value: string) => {
+    setBlocks(prev => prev.map(block => ({
+      ...block,
+      sets: block.sets.map(set => ({
+        ...set,
+        movements: set.movements.map(m => {
+          if (m._id === movementId) {
+            return {
+              ...m,
+              [field]: field === 'setsCount' ? parseInt(value) || 0 : value
+            };
+          }
+          return m;
+        })
+      }))
+    })));
+  };
+
+  const handleUpdateSetRest = (blockIndex: number, setIndex: number, value: string) => {
+    setBlocks(prev => {
+      const newBlocks = [...prev];
+      newBlocks[blockIndex].sets[setIndex].rest = value.replace(/[^0-9]/g, '');
+      return newBlocks;
+    });
+  };
+
+  const handleUpdateSetLabel = (blockIndex: number, setIndex: number, value: string) => {
+    setBlocks(prev => {
+      const newBlocks = [...prev];
+      newBlocks[blockIndex].sets[setIndex].label = value;
+      return newBlocks;
+    });
+  };
+
+  // --- Dropdown ---
+
+  const toggleDropdown = (id: string, event: any) => {
+    if (visibleDropdown === id) {
+      closeDropdown();
+    } else {
+      const { pageY } = event.nativeEvent;
+      setDropdownPosition({ top: pageY + 10, right: 16 });
+      setVisibleDropdown(id);
+    }
+  };
+
+  const closeDropdown = () => {
+    setVisibleDropdown(null);
+  };
+
+  // --- Publish ---
 
   const handlePublish = async () => {
     if (!programName.trim()) {
       Alert.alert("Error", "Please enter a program name.");
       return;
     }
-    if (exercises.length === 0) {
+    
+    // Validate at least one movement
+    let hasExercises = false;
+    blocks.forEach(b => b.sets.forEach(s => {
+      if (s.movements.length > 0) hasExercises = true;
+    }));
+
+    if (!hasExercises) {
       Alert.alert("Error", "Please add at least one exercise.");
       return;
     }
@@ -163,24 +305,45 @@ export default function CreateCustomWorkoutScreen() {
       }
       const userId = user.uid;
       
-      // Save to new customUserWorkouts collection as requested
+      // Clean up internal IDs before saving
+      const cleanedExercises = blocks.map(block => ({
+        sets: block.sets.map(set => ({
+          label: set.label,
+          rest: set.rest,
+          movements: set.movements.map(m => ({
+            category: m.category,
+            exerciseId: m.exerciseId,
+            name: m.name,
+            reps: m.reps,
+            setsCount: m.setsCount,
+            // We don't necessarily need to save image/videoUrl if we fetch it, 
+            // but saving it acts as a cache or override. 
+            // The prompt's example structure didn't explicitly forbid it, 
+            // but usually we save minimal data. 
+            // However, for custom workouts, it's safer to save what we see.
+            // Let's save minimal identifiers + user overrides.
+          }))
+        }))
+      }));
+
+      // Calculate total exercise count
+      const exerciseCount = blocks.reduce((acc, b) => acc + b.sets.reduce((sAcc, s) => sAcc + s.movements.length, 0), 0);
+
       await firestore().collection('customUserWorkouts').add({
         userId,
-        title: programName,
+        name: programName, // Changed from title to name to match new structure
         level: level || 'Custom', 
-        target: targetMuscle || 'Full Body',
-        equipment: equipment || 'None',
-        exerciseCount: exercises.length,
-        duration: duration || `${exercises.length * 5}`, 
-        image: coverImage || 'https://via.placeholder.com/300', 
-        exercises: exercises,
-        createdAt: firestore.FieldValue.serverTimestamp(),
+        targetMuscles: targetMuscle ? [targetMuscle] : ['Full Body'], // Array
+        equipment: equipment ? [equipment] : ['None'], // Array
+        duration: duration || '45', 
+        coverImage: coverImage || 'https://via.placeholder.com/300', 
+        exercises: cleanedExercises,
+        workoutTarget: 'Custom',
+        workout_type_name: 'Custom',
+        createdAt: new Date().toISOString(),
         isCustom: true
       });
 
-      // Keep saving to saved_workouts if needed for library, or remove if redundancy is not wanted.
-      // For now, I will remove saving to 'saved_workouts' to strictly follow the new instruction about 'customUserWorkouts'.
-      
       Alert.alert("Success", "Program created successfully!", [
         { text: "OK", onPress: () => router.back() }
       ]);
@@ -191,14 +354,13 @@ export default function CreateCustomWorkoutScreen() {
   };
 
   const handleDurationChange = (text: string) => {
-    // Only allow numeric characters
     const numericValue = text.replace(/[^0-9]/g, '');
     setDuration(numericValue);
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#12140a" />
+      <StatusBar barStyle="light-content" backgroundColor="#1f230f" />
       
       {/* Header */}
       <View style={styles.header}>
@@ -233,6 +395,17 @@ export default function CreateCustomWorkoutScreen() {
             )}
           </TouchableOpacity>
 
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>PROGRAM NAME</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Extreme Chest"
+              placeholderTextColor="#64748b"
+              value={programName}
+              onChangeText={setProgramName}
+            />
+          </View>
+
           <View style={styles.inputRow}>
             <View style={[styles.inputContainer, { flex: 1 }]}>
               <Text style={styles.label}>DURATION (MIN)</Text>
@@ -251,7 +424,7 @@ export default function CreateCustomWorkoutScreen() {
               <Text style={styles.label}>TARGET MUSCLE</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Full Body"
+                placeholder="Chest"
                 placeholderTextColor="#64748b"
                 value={targetMuscle}
                 onChangeText={setTargetMuscle}
@@ -260,7 +433,7 @@ export default function CreateCustomWorkoutScreen() {
           </View>
           
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>EQUIPMENT NEEDED</Text>
+            <Text style={styles.label}>EQUIPMENT</Text>
             <TextInput
               style={styles.input}
               placeholder="Dumbbells, Bench"
@@ -274,7 +447,7 @@ export default function CreateCustomWorkoutScreen() {
             <Text style={styles.label}>LEVEL</Text>
             <TextInput
               style={styles.input}
-              placeholder="Beginner, Intermediate, Advanced"
+              placeholder="Professional"
               placeholderTextColor="#64748b"
               value={level}
               onChangeText={setLevel}
@@ -285,88 +458,111 @@ export default function CreateCustomWorkoutScreen() {
         {/* Workout Builder Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Workout Builder</Text>
+            <Text style={styles.sectionTitle}>Workout Structure</Text>
           </View>
 
-          {/* Day 1 Card */}
-          <View style={styles.dayCard}>
-            <View style={styles.dayHeader}>
-              <View style={styles.dayTitleContainer}>
-                <MaterialIcons name="drag-indicator" size={24} color="#94a3b8" />
-                <TextInput
-                  style={styles.dayTitleInput}
-                  placeholder="Program Name (e.g. Upper Body)"
-                  placeholderTextColor="#64748b"
-                  value={programName}
-                  onChangeText={setProgramName}
-                />
+          {blocks.map((block, blockIndex) => (
+            <View key={block._id} style={styles.blockContainer}>
+              <View style={styles.blockHeader}>
+                <View style={styles.blockHeaderIndicator} />
+                <Text style={styles.blockTitle}>Exercise Block {blockIndex + 1}</Text>
+                {/* Option to delete block could go here */}
               </View>
-            </View>
 
-            <View style={styles.dayContent}>
-              {exercises.length === 0 ? (
-                <Text style={{ color: '#64748b', textAlign: 'center', padding: 20 }}>
-                  No exercises added yet. Tap "Add Exercise" to start.
-                </Text>
-              ) : (
-                exercises.map((exercise, index) => (
-                  <View 
-                    key={exercise.id} 
-                    style={styles.exerciseItem}
-                  >
-                    <MaterialIcons name="drag-handle" size={24} color="#64748b" />
-                    <View style={styles.exerciseImageContainer}>
-                      <Image 
-                        source={{ uri: exercise.mainImage }} 
-                        style={styles.exerciseImage} 
-                      />
-                    </View>
-                    <View style={styles.exerciseInfo}>
-                      <Text style={styles.exerciseName}>{exercise.name}</Text>
-                      <View style={styles.setsRepsContainer}>
-                        <View style={styles.setRepInputContainer}>
-                          <TextInput
-                            style={styles.setRepInput}
-                            value={exercise.sets}
-                            onChangeText={(val) => handleUpdateExercise(exercise.id, 'sets', val)}
-                            keyboardType="numeric"
-                            placeholder="-"
+              <View style={styles.blockContent}>
+                {block.sets.map((set, setIndex) => (
+                  <View key={set._id} style={styles.setContainer}>
+                    <View style={styles.setHeader}>
+                        <TextInput
+                            style={styles.setTitleInput}
+                            value={set.label}
+                            onChangeText={(text) => handleUpdateSetLabel(blockIndex, setIndex, text)}
+                            placeholder="Set Name"
                             placeholderTextColor="#64748b"
-                          />
-                          <Text style={styles.setRepLabel}>Sets</Text>
-                        </View>
-                        <Text style={styles.xDivider}>×</Text>
-                        <View style={styles.setRepInputContainer}>
-                          <TextInput
-                            style={styles.setRepInput}
-                            value={exercise.reps}
-                            onChangeText={(val) => handleUpdateExercise(exercise.id, 'reps', val)}
-                            keyboardType="numeric"
-                            placeholder="-"
-                            placeholderTextColor="#64748b"
-                          />
-                          <Text style={styles.setRepLabel}>Reps</Text>
-                        </View>
-                      </View>
+                        />
+                        {/* Option to delete set could go here */}
                     </View>
-                    <View style={{ position: 'relative' }}>
-                      <TouchableOpacity onPress={(e) => toggleDropdown(exercise.id, e)}>
-                        <MaterialIcons name="more-vert" size={24} color="#94a3b8" />
+
+                    <View style={styles.movementsList}>
+                      {set.movements.map((movement, moveIndex) => (
+                        <View key={movement._id} style={styles.movementItem}>
+                          <View style={styles.movementImageContainer}>
+                            <Image 
+                              source={{ uri: movement.image }} 
+                              style={styles.movementImage} 
+                            />
+                          </View>
+                          <View style={styles.movementInfo}>
+                            <Text style={styles.movementName} numberOfLines={1}>{movement.name}</Text>
+                            <View style={styles.setsRepsContainer}>
+                              <View style={styles.setRepInputContainer}>
+                                <TextInput
+                                  style={styles.setRepInput}
+                                  value={String(movement.setsCount)}
+                                  onChangeText={(val) => handleUpdateMovement(movement._id, 'setsCount', val)}
+                                  keyboardType="numeric"
+                                />
+                                <Text style={styles.setRepLabel}>Sets</Text>
+                              </View>
+                              <Text style={styles.xDivider}>×</Text>
+                              <View style={styles.setRepInputContainer}>
+                                <TextInput
+                                  style={styles.setRepInput}
+                                  value={movement.reps}
+                                  onChangeText={(val) => handleUpdateMovement(movement._id, 'reps', val)}
+                                  placeholder="-"
+                                  placeholderTextColor="#64748b"
+                                />
+                                <Text style={styles.setRepLabel}>Reps</Text>
+                              </View>
+                            </View>
+                          </View>
+                          <TouchableOpacity onPress={(e) => toggleDropdown(movement._id, e)} style={styles.moreButton}>
+                            <MaterialIcons name="more-vert" size={24} color="#94a3b8" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                      
+                      <TouchableOpacity 
+                        style={styles.addMovementButton}
+                        onPress={() => handleAddMovement(blockIndex, setIndex)}
+                      >
+                        <MaterialIcons name="add" size={20} color="#ccff00" />
+                        <Text style={styles.addMovementText}>Add Exercise</Text>
                       </TouchableOpacity>
                     </View>
-                  </View>
-                ))
-              )}
 
-              <TouchableOpacity 
-                style={styles.addExerciseButton}
-                onPress={handleAddExercise}
-              >
-                <MaterialIcons name="add-circle-outline" size={20} color="#64748b" />
-                <Text style={styles.addExerciseText}>Add Exercise</Text>
-              </TouchableOpacity>
+                    <View style={styles.restContainer}>
+                        <MaterialIcons name="timer" size={16} color="#ccff00" />
+                        <Text style={styles.restLabel}>Rest (sec):</Text>
+                        <TextInput
+                            style={styles.restInput}
+                            value={set.rest}
+                            onChangeText={(text) => handleUpdateSetRest(blockIndex, setIndex, text)}
+                            keyboardType="numeric"
+                            placeholder="60"
+                            placeholderTextColor="#64748b"
+                        />
+                    </View>
+                  </View>
+                ))}
+
+                <TouchableOpacity 
+                    style={styles.addSetButton}
+                    onPress={() => handleAddSet(blockIndex)}
+                >
+                    <Text style={styles.addSetText}>+ Add Set Group</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          ))}
+
+          <TouchableOpacity 
+            style={styles.addBlockButton}
+            onPress={handleAddBlock}
+          >
+            <Text style={styles.addBlockText}>+ Add New Block</Text>
+          </TouchableOpacity>
 
         </View>
 
@@ -385,7 +581,10 @@ export default function CreateCustomWorkoutScreen() {
         <View style={[styles.dropdownMenu, { top: dropdownPosition.top, right: dropdownPosition.right }]}>
           <TouchableOpacity 
             style={styles.dropdownItem} 
-            onPress={() => visibleDropdown && handleReplace(visibleDropdown)}
+            onPress={() => {
+                const loc = findMovementLocation(visibleDropdown);
+                if (loc) handleReplaceMovement(loc.blockIndex, loc.setIndex, visibleDropdown);
+            }}
             activeOpacity={0.7}
           >
             <MaterialIcons name="loop" size={20} color="#f1f5f9" />
@@ -394,7 +593,7 @@ export default function CreateCustomWorkoutScreen() {
           <View style={styles.dropdownDivider} />
           <TouchableOpacity 
             style={styles.dropdownItem} 
-            onPress={() => visibleDropdown && handleDelete(visibleDropdown)}
+            onPress={() => handleDeleteMovement(visibleDropdown)}
             activeOpacity={0.7}
           >
             <MaterialIcons name="delete-outline" size={20} color="#ef4444" />
@@ -405,7 +604,7 @@ export default function CreateCustomWorkoutScreen() {
 
       {/* Bottom Actions */}
       <LinearGradient
-        colors={['transparent', '#12140a']}
+        colors={['transparent', '#1f230f']}
         style={styles.bottomActionsContainer}
         pointerEvents="box-none"
       >
@@ -414,7 +613,7 @@ export default function CreateCustomWorkoutScreen() {
             <Text style={styles.draftButtonText}>Draft</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.publishButton} onPress={handlePublish}>
-            <Text style={styles.publishButtonText}>Publish Program</Text>
+            <Text style={styles.publishButtonText}>Publish</Text>
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -425,7 +624,7 @@ export default function CreateCustomWorkoutScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#12140a',
+    backgroundColor: '#1f230f', // Matches WorkoutDetailsScreen
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   header: {
@@ -435,13 +634,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(204, 255, 0, 0.1)',
-    backgroundColor: 'rgba(18, 20, 10, 0.8)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#1f230f',
   },
   backButton: {
     padding: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(204, 255, 0, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   headerTitleContainer: {
     flex: 1,
@@ -449,8 +648,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: '#f1f5f9',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   scrollView: {
     flex: 1,
@@ -472,16 +672,16 @@ const styles = StyleSheet.create({
     color: '#ccff00',
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   addImageContainer: {
     height: 180,
     borderRadius: 12,
     marginBottom: 24,
     overflow: 'hidden',
-    backgroundColor: 'rgba(204, 255, 0, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     borderStyle: 'dashed',
   },
   addImagePlaceholder: {
@@ -501,118 +701,255 @@ const styles = StyleSheet.create({
   label: {
     color: '#94a3b8',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: 'bold',
     marginBottom: 8,
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   input: {
-    backgroundColor: 'rgba(204, 255, 0, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     color: '#f1f5f9',
     fontSize: 16,
   },
-  dayCard: {
-    backgroundColor: 'rgba(204, 255, 0, 0.05)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.1)',
-    overflow: 'visible', // Changed to visible for dropdown
-    marginBottom: 16,
-    zIndex: 1,
-  },
-  dayHeader: {
+  inputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: 'rgba(204, 255, 0, 0.1)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(204, 255, 0, 0.1)',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    marginBottom: 16,
   },
-  dayTitleContainer: {
+  // Block Styles
+  blockContainer: {
+    marginBottom: 24,
+    gap: 12,
+  },
+  blockHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginBottom: 8,
   },
-  dayTitle: {
-    color: '#f1f5f9',
-    fontSize: 16,
-    fontWeight: 'bold',
+  blockHeaderIndicator: {
+    height: 24,
+    width: 4,
+    backgroundColor: '#ccff00',
   },
-  dayTitleInput: {
+  blockTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    fontStyle: 'italic',
     color: '#f1f5f9',
-    fontSize: 16,
+  },
+  blockContent: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    gap: 16,
+  },
+  // Set Styles
+  setContainer: {
+    backgroundColor: '#1f230f',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  setHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  setTitleInput: {
+    color: '#ccff00',
+    fontSize: 14,
     fontWeight: 'bold',
-    flex: 1,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
     padding: 0,
+    flex: 1,
   },
-  deleteButton: {
+  movementsList: {
+    gap: 12,
+  },
+  movementItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     padding: 8,
     borderRadius: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-  },
-  dayContent: {
-    padding: 16,
-    gap: 12,
-  },
-  exerciseItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: 'rgba(18, 20, 10, 0.9)', // More opaque for dropdown readability
-    padding: 12,
-    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.1)',
-    position: 'relative',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
-  exerciseImageContainer: {
+  movementImageContainer: {
     width: 48,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 6,
     overflow: 'hidden',
-    backgroundColor: 'rgba(204, 255, 0, 0.2)',
+    backgroundColor: '#334155',
   },
-  exerciseImage: {
+  movementImage: {
     width: '100%',
     height: '100%',
   },
-  exerciseInfo: {
+  movementInfo: {
     flex: 1,
   },
-  exerciseName: {
+  movementName: {
     color: '#f1f5f9',
     fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 2,
+    fontWeight: 'bold',
+    marginBottom: 4,
   },
-  exerciseDetails: {
+  setsRepsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  setRepInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  setRepInput: {
+    color: '#f1f5f9',
+    fontSize: 12,
+    fontWeight: 'bold',
+    minWidth: 20,
+    textAlign: 'center',
+    padding: 0,
+  },
+  setRepLabel: {
     color: '#94a3b8',
+    fontSize: 10,
+    marginLeft: 4,
+  },
+  xDivider: {
+    color: '#64748b',
     fontSize: 12,
   },
-  addExerciseButton: {
+  moreButton: {
+    padding: 4,
+  },
+  addMovementButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.3)',
     borderStyle: 'dashed',
-    borderRadius: 12,
+    borderRadius: 8,
     marginTop: 4,
+    backgroundColor: 'rgba(204, 255, 0, 0.05)',
   },
-  addExerciseText: {
-    color: '#94a3b8',
-    fontSize: 14,
+  addMovementText: {
+    color: '#ccff00',
+    fontSize: 12,
     fontWeight: 'bold',
   },
+  restContainer: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  restLabel: {
+    color: '#ccff00',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  restInput: {
+    color: '#f1f5f9',
+    fontSize: 14,
+    fontWeight: 'bold',
+    padding: 0,
+    minWidth: 40,
+  },
+  addSetButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+  },
+  addSetText: {
+    color: '#f1f5f9',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  addBlockButton: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderWidth: 2,
+    borderColor: '#ccff00',
+    borderStyle: 'dashed',
+    borderRadius: 16,
+    marginTop: 8,
+  },
+  addBlockText: {
+    color: '#ccff00',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  // Dropdown
+  dropdownMenu: {
+    position: 'absolute',
+    backgroundColor: '#1d2012',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    width: 150,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
+    zIndex: 2000,
+    paddingVertical: 4,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  dropdownText: {
+    color: '#f1f5f9',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 8,
+  },
+  dropdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 900,
+  },
+  // Bottom Actions
   bottomActionsContainer: {
     position: 'absolute',
     bottom: 0,
@@ -620,7 +957,7 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 16,
     paddingTop: 40,
-    zIndex: 2000,
+    zIndex: 1000,
   },
   bottomActions: {
     flexDirection: 'row',
@@ -629,13 +966,12 @@ const styles = StyleSheet.create({
   draftButton: {
     flex: 1,
     paddingVertical: 16,
-    paddingHorizontal: 24,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(18, 20, 10, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   draftButtonText: {
     color: '#f1f5f9',
@@ -645,7 +981,6 @@ const styles = StyleSheet.create({
   publishButton: {
     flex: 2,
     paddingVertical: 16,
-    paddingHorizontal: 24,
     borderRadius: 12,
     backgroundColor: '#ccff00',
     alignItems: 'center',
@@ -657,87 +992,8 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   publishButtonText: {
-    color: '#000000',
+    color: '#1f230f',
     fontSize: 14,
     fontWeight: 'bold',
   },
-  inputRow: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  setsRepsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    gap: 8,
-  },
-  setRepInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  setRepInput: {
-    color: '#f1f5f9',
-    fontSize: 14,
-    fontWeight: 'bold',
-    width: 24,
-    textAlign: 'center',
-    padding: 0,
-  },
-  setRepLabel: {
-    color: '#94a3b8',
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  xDivider: {
-    color: '#64748b',
-    fontSize: 14,
-  },
-  dropdownMenu: {
-    position: 'absolute',
-    right: 0,
-    top: 36, // Slightly lower to not overlap with button
-    backgroundColor: '#1d2012',
-    borderRadius: 12, // More rounded
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    width: 150, // Slightly wider
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 }, // Deeper shadow
-    shadowOpacity: 0.5, // Darker shadow
-    shadowRadius: 12,
-    elevation: 10,
-    zIndex: 2000,
-    paddingVertical: 4, // Add vertical padding
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12, // More gap
-    paddingVertical: 14, // Taller touch area
-    paddingHorizontal: 16,
-  },
-  dropdownText: {
-    color: '#f1f5f9',
-    fontSize: 15, // Larger text
-    fontWeight: '500',
-  },
-  dropdownDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    marginHorizontal: 8, // Inset divider
-  },
-  dropdownOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 900,
-  }
 });
