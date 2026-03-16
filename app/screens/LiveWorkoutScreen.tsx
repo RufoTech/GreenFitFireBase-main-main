@@ -257,10 +257,20 @@ export default function LiveWorkoutScreen() {
   const progressPercent = flatWorkoutQueue.length > 1 ? Math.round((currentIndex / (flatWorkoutQueue.length - 1)) * 100) : 0;
   
   const videoId = currentExercise.videoUrl ? getYoutubeId(currentExercise.videoUrl) : null;
-  const mainImage = currentExercise.image; // Already cleaned/processed in backend or consistent
+  const mainImage = currentExercise.image; 
   
-  // Use category as muscle group fallback if muscleGroups missing
-  const muscleName = currentExercise.category; 
+  // Use muscleGroups from exercise data
+  // User request: "targetMuscle img ve nameler "workouts" collectionunun "muscleGroups" arrayinin "imageUrl" fieldindan ve "name" fieldindan gelecek.image olarak ilk imageni gostereceksen digerlerine ehtiyac yoxdur"
+  let targetMuscleName = "General";
+  let targetMuscleImage = null;
+
+  if (currentExercise.muscleGroups && currentExercise.muscleGroups.length > 0) {
+      targetMuscleName = currentExercise.muscleGroups[0].name;
+      targetMuscleImage = currentExercise.muscleGroups[0].imageUrl;
+  } else if (currentExercise.category) {
+      // Fallback to category if no muscle groups defined
+      targetMuscleName = currentExercise.category;
+  }
   
   // Create Plyr HTML
   const plyrHTML = `
@@ -408,14 +418,22 @@ export default function LiveWorkoutScreen() {
         <View style={styles.muscleMapCard}>
             <View style={styles.muscleMapCardHeader}>
                 <View style={styles.muscleMapContainer}>
-                     <MaterialIcons name="accessibility" size={60} color="rgba(255,255,255,0.4)" />
+                     {targetMuscleImage ? (
+                        <ImageBackground 
+                            source={{ uri: targetMuscleImage }} 
+                            style={{ width: '100%', height: '100%' }}
+                            resizeMode="cover"
+                        />
+                     ) : (
+                        <MaterialIcons name="accessibility" size={60} color="rgba(255,255,255,0.4)" />
+                     )}
                 </View>
                 <View style={styles.muscleInfo}>
                     <Text style={styles.muscleInfoTitle}>Target Muscles</Text>
                     <View style={styles.muscleTags}>
                         <View style={[styles.muscleTag, { backgroundColor: PRIMARY }]}>
                             <Text style={[styles.muscleTagText, { color: BG_DARK }]}>
-                                {muscleName.toUpperCase()}
+                                {targetMuscleName.toUpperCase()}
                             </Text>
                         </View>
                     </View>
