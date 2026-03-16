@@ -1,50 +1,60 @@
-import React, { useState, useEffect } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
-  SafeAreaView,
-  StatusBar,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
-  ImageBackground,
+  ActivityIndicator,
   Dimensions,
   Image,
-  ActivityIndicator,
+  ImageBackground,
+  Platform,
+  ScrollView,
+  Share,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import firestore from '@react-native-firebase/firestore';
-import auth from '@react-native-firebase/auth';
 
 const { width } = Dimensions.get('window');
 
-// Define types for fetched data
-interface Exercise {
-  id: string;
+// Define types for new data structure
+interface Movement {
+  category: string;
+  exerciseId: string;
   name: string;
-  sets: string | number;
-  reps: string | number;
+  reps: string;
+  setsCount: number;
   image?: string;
-  muscles?: string[];
-  category?: string;
   videoUrl?: string;
-  targetMuscleImage?: string;
-  muscleNames?: string[];
   instructions?: string;
+}
+
+interface WorkoutSet {
+  label: string;
+  movements: Movement[];
+  rest: string;
+}
+
+interface ExerciseBlock {
+  sets: WorkoutSet[];
 }
 
 interface WorkoutDetails {
   id: string;
-  title: string;
+  name: string;
   level: string;
   duration: string;
-  equipment: string;
-  target: string;
-  image: string;
-  exercises: Exercise[];
+  equipment: string[];
+  targetMuscles: string[];
+  coverImage: string;
+  exercises: ExerciseBlock[];
+  workoutTarget: string;
+  workout_type_name: string;
+  createdAt: string;
 }
 
 export default function WorkoutDetailsScreen() {
@@ -58,12 +68,11 @@ export default function WorkoutDetailsScreen() {
   useEffect(() => {
     if (!id) return;
 
-    // Check if workout is already saved for current user (mocked ID for now)
     const user = auth().currentUser;
-    if (!user) return;
-    const userId = user.uid;
+    const userId = user?.uid;
 
     const checkSavedStatus = async () => {
+       if (!userId) return;
        try {
          const snapshot = await firestore()
            .collection('saved_workouts')
@@ -88,119 +97,106 @@ export default function WorkoutDetailsScreen() {
       try {
         let data: any;
         let docId = String(id);
+        let rawData: any;
 
         if (isCustom === 'true') {
-             // Fetch from customUserWorkouts collection
              const customDoc = await firestore().collection('customUserWorkouts').doc(docId).get();
              if (customDoc.exists) {
-                 data = customDoc.data();
-                 
-                 // Map custom exercises to component format using Promise.all for async videoUrl fetch
-                 const exercisesData = await Promise.all((data.exercises || []).map(async (ex: any, index: number) => {
-                     let videoUrl = ex.videoUrl || '';
-                     if (!videoUrl) {
-                        try {
-                            const snapshot = await firestore().collection('workouts').where('name', '==', ex.name).limit(1).get();
-                            if (!snapshot.empty) {
-                                videoUrl = snapshot.docs[0].data().videoUrl || '';
-                            }
-                        } catch (e) { console.log('Error fetching videoUrl', e); }
-                     }
-
-                     return {
-                        id: ex.id || `ex-${index}`,
-                        name: ex.name,
-                        sets: ex.sets,
-                        reps: ex.reps,
-                        image: ex.mainImage || ex.image || 'https://via.placeholder.com/150',
-                        category: ex.type || ex.category || 'General',
-                        videoUrl: videoUrl,
-                        targetMuscleImage: ex.targetMuscleImage || ex.mainImage || '',
-                        muscleNames: ex.muscleNames || ex.muscles || [],
-                        instructions: ex.instructions || ''
-                     };
-                 }));
-
-                 setWorkout({
-                     id: customDoc.id,
-                     title: data.title,
-                     level: data.level,
-                     duration: data.duration.includes('min') ? data.duration : `${data.duration} min`, 
-                     equipment: data.equipment,
-                     target: data.target,
-                     image: data.image,
-                     exercises: exercisesData
-                 });
+                 rawData = customDoc.data();
+                 rawData.id = customDoc.id;
              }
          } else {
             const workoutDoc = await firestore().collection('workout_programs').doc(docId).get();
             if (workoutDoc.exists) {
-              data = workoutDoc.data();
-              // ... existing logic for system workouts ...
-              // Process exercises array
-              const exercisePromises = (data?.exercises || []).map(async (exercise: any, index: number) => {
-                 let imageUrl = 'https://via.placeholder.com/150';
-                 let videoUrl = '';
-                 let targetMuscleImage = '';
-                 let muscleNames: string[] = [];
-                 let instructions = '';
-                 
-                 try {
-                    const workoutQuery = await firestore()
-                      .collection('workouts')
-                      .where('name', '==', exercise.name)
-                      .limit(1)
-                      .get();
-                    
-                    if (!workoutQuery.empty) {
-                       const workoutData = workoutQuery.docs[0].data();
-                       imageUrl = workoutData.mainImage || workoutData.imageUrl || imageUrl;
-                       videoUrl = workoutData.videoUrl || '';
-                       instructions = workoutData.instructions || '';
-                       
-                       if (workoutData.muscleGroups && Array.isArray(workoutData.muscleGroups)) {
-                          if (workoutData.muscleGroups.length > 0) {
-                              targetMuscleImage = workoutData.muscleGroups[0].imageUrl || '';
-                          }
-                          muscleNames = workoutData.muscleGroups.map((mg: any) => mg.name).filter(Boolean);
-                       }
-                    }
-                 } catch (err) {
-                    console.log(`Error fetching image for exercise ${exercise.name}:`, err);
-                 }
-    
-                 return {
-                   id: `ex-${index}`,
-                   name: exercise.name || 'Unknown Exercise',
-                   sets: exercise.sets || '0',
-                   reps: exercise.reps || '0',
-                   category: exercise.category,
-                   image: imageUrl,
-                   muscles: muscleNames,
-                   videoUrl,
-                   targetMuscleImage,
-                   muscleNames,
-                   instructions
-                 };
-              });
-    
-              const exercisesData = await Promise.all(exercisePromises);
-    
-              // Parse equipment and target arrays
-              const equipment = Array.isArray(data?.equipment) ? data.equipment.join(', ') : (data?.equipment || 'None');
-              const target = Array.isArray(data?.targetMuscles) ? data.targetMuscles.join(', ') : (data?.targetMuscles || 'General');
-    
-              setWorkout({
-                id: workoutDoc.id,
-                title: data?.name || 'Untitled Workout',
-                level: data?.level || 'General',
-                duration: data?.duration || '0 min',
-                equipment: equipment,
-                target: target,
-                image: data?.coverImage || 'https://via.placeholder.com/300',
-                exercises: exercisesData
-              });
+              rawData = workoutDoc.data();
+              rawData.id = workoutDoc.id;
             }
+        }
+
+        if (rawData) {
+            // Transform raw data to match the new structure if needed, or use directly if it matches
+            // We assume the incoming data matches the new structure provided in the prompt
+            // But we need to enrich movements with images/videos from the 'workouts' collection
+
+            const exercises: ExerciseBlock[] = rawData.exercises || [];
+
+            // Process exercises to fetch images for movements
+            const processedExercises = await Promise.all(exercises.map(async (block) => {
+                const processedSets = await Promise.all((block.sets || []).map(async (set) => {
+                    const processedMovements = await Promise.all((set.movements || []).map(async (movement: any) => {
+                        let imageUrl = 'https://via.placeholder.com/150';
+                        let videoUrl = '';
+                        let instructions = '';
+
+                        try {
+                            // Try to fetch by exerciseId first if available
+                            let exerciseQuery;
+                            if (movement.exerciseId) {
+                                const exerciseDoc = await firestore().collection('workouts').doc(movement.exerciseId).get();
+                                if (exerciseDoc.exists) {
+                                    const exData = exerciseDoc.data();
+                                    imageUrl = exData?.mainImage || exData?.imageUrl || imageUrl;
+                                    videoUrl = exData?.videoUrl || '';
+                                    instructions = exData?.instructions || '';
+                                } else {
+                                    // Fallback to name search if ID not found or invalid
+                                     exerciseQuery = await firestore()
+                                        .collection('workouts')
+                                        .where('name', '==', movement.name)
+                                        .limit(1)
+                                        .get();
+                                }
+                            } else {
+                                exerciseQuery = await firestore()
+                                    .collection('workouts')
+                                    .where('name', '==', movement.name)
+                                    .limit(1)
+                                    .get();
+                            }
+
+                            if (exerciseQuery && !exerciseQuery.empty) {
+                                const exData = exerciseQuery.docs[0].data();
+                                imageUrl = exData.mainImage || exData.imageUrl || imageUrl;
+                                videoUrl = exData.videoUrl || '';
+                                instructions = exData.instructions || '';
+                            }
+                        } catch (e) {
+                            console.log('Error fetching exercise details', e);
+                        }
+
+                        return {
+                            ...movement,
+                            image: imageUrl,
+                            videoUrl,
+                            instructions
+                        };
+                    }));
+
+                    return {
+                        ...set,
+                        movements: processedMovements
+                    };
+                }));
+
+                return {
+                    ...block,
+                    sets: processedSets
+                };
+            }));
+            
+            setWorkout({
+                id: rawData.id,
+                name: rawData.name || rawData.title || 'Untitled Workout',
+                level: rawData.level || 'General',
+                duration: rawData.duration || '0',
+                equipment: Array.isArray(rawData.equipment) ? rawData.equipment : (rawData.equipment ? [rawData.equipment] : []),
+                targetMuscles: Array.isArray(rawData.targetMuscles) ? rawData.targetMuscles : (rawData.targetMuscles ? [rawData.targetMuscles] : []),
+                coverImage: rawData.coverImage || rawData.image || 'https://via.placeholder.com/300',
+                exercises: processedExercises,
+                workoutTarget: rawData.workoutTarget || '',
+                workout_type_name: rawData.workout_type_name || '',
+                createdAt: rawData.createdAt || new Date().toISOString()
+            });
         }
       } catch (error) {
         console.error("Error fetching workout details:", error);
@@ -216,7 +212,6 @@ export default function WorkoutDetailsScreen() {
   const handleToggleLibrary = async () => {
     if (!workout) return;
 
-    // Use current user ID (mocked for now)
     const user = auth().currentUser;
     if (!user) {
         alert("Please log in to save workouts.");
@@ -226,22 +221,20 @@ export default function WorkoutDetailsScreen() {
 
     try {
       if (isSaved && savedDocId) {
-        // Remove from library
         await firestore().collection('saved_workouts').doc(savedDocId).delete();
         setIsSaved(false);
         setSavedDocId(null);
         alert('Workout removed from library!');
       } else {
-        // Save to library with userId
         const savedWorkout = {
-            userId: userId, // Associate with user
+            userId: userId,
             originalId: id,
-            title: workout.title,
+            title: workout.name,
             level: workout.level,
-            target: workout.target,
-            exerciseCount: workout.exercises.length,
-            duration: workout.duration.replace(' min', ''),
-            image: workout.image,
+            target: workout.targetMuscles.join(', '),
+            exerciseCount: workout.exercises.reduce((acc, block) => acc + block.sets.reduce((sAcc, set) => sAcc + set.movements.length, 0), 0),
+            duration: workout.duration,
+            image: workout.coverImage,
             savedAt: firestore.FieldValue.serverTimestamp(),
         };
 
@@ -256,38 +249,57 @@ export default function WorkoutDetailsScreen() {
     }
   };
 
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `Check out this workout: ${workout?.name}`,
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <StatusBar barStyle="light-content" backgroundColor="#1f230f" />
         <ActivityIndicator size="large" color="#ccff00" />
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (!workout) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <StatusBar barStyle="light-content" backgroundColor="#1f230f" />
         <Text style={{ color: '#f1f5f9', fontSize: 18 }}>Workout not found</Text>
         <TouchableOpacity style={{ marginTop: 20 }} onPress={() => router.back()}>
              <Text style={{ color: '#ccff00', fontSize: 16 }}>Go Back</Text>
         </TouchableOpacity>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1f230f" />
       
-      {/* Back Button Overlay - Fixed Position */}
-      <TouchableOpacity 
-        style={styles.backButtonOverlay}
-        onPress={() => router.back()}
-      >
-        <MaterialIcons name="arrow-back" size={24} color="#f1f5f9" />
-      </TouchableOpacity>
+      {/* Top Navigation */}
+      <View style={styles.topNav}>
+         <TouchableOpacity 
+            style={styles.navButton}
+            onPress={() => router.back()}
+         >
+            <MaterialIcons name="arrow-back" size={24} color="#f1f5f9" />
+         </TouchableOpacity>
+         <Text style={styles.navTitle}>Workout Details</Text>
+         <TouchableOpacity 
+            style={styles.navButton}
+            onPress={handleShare}
+         >
+            <MaterialIcons name="share" size={24} color="#f1f5f9" />
+         </TouchableOpacity>
+      </View>
 
       <ScrollView 
         style={styles.scrollView} 
@@ -296,23 +308,24 @@ export default function WorkoutDetailsScreen() {
       >
         {/* Hero Section */}
         <View style={styles.heroContainer}>
-          <ImageBackground
-            source={{ uri: workout.image }}
-            style={styles.heroImage}
-            imageStyle={{ borderRadius: 12 }}
-          >
-            <LinearGradient
-              colors={['transparent', 'rgba(31, 35, 15, 0.8)']}
-              style={styles.heroOverlay}
-            />
-
-            <View style={styles.heroContent}>
-              <View style={styles.levelBadge}>
-                <Text style={styles.levelText}>{workout.level}</Text>
-              </View>
-              <Text style={styles.workoutTitle}>{workout.title}</Text>
+            <View style={styles.heroImageWrapper}>
+                <ImageBackground
+                    source={{ uri: workout.coverImage }}
+                    style={styles.heroImage}
+                    imageStyle={{ borderRadius: 12 }}
+                >
+                    <LinearGradient
+                        colors={['transparent', 'rgba(31, 35, 15, 0.8)']}
+                        style={styles.heroOverlay}
+                    />
+                    <View style={styles.heroContent}>
+                        <View style={styles.levelBadge}>
+                            <Text style={styles.levelText}>{workout.level}</Text>
+                        </View>
+                        <Text style={styles.workoutTitle}>{workout.name}</Text>
+                    </View>
+                </ImageBackground>
             </View>
-          </ImageBackground>
         </View>
 
         {/* Action Buttons */}
@@ -325,7 +338,7 @@ export default function WorkoutDetailsScreen() {
             onPress={handleToggleLibrary}
           >
             <Text style={[styles.saveToLibraryText, isSaved && styles.savedButtonText]}>
-                {isSaved ? 'Remove from Library' : 'Save to Library'}
+                {isSaved ? 'Saved' : 'Save to Library'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -335,104 +348,152 @@ export default function WorkoutDetailsScreen() {
           <View style={styles.summaryItem}>
             <MaterialIcons name="schedule" size={24} color="#ccff00" style={styles.summaryIcon} />
             <Text style={styles.summaryLabel}>Duration</Text>
-            <Text style={styles.summaryValue}>{workout.duration}</Text>
+            <Text style={styles.summaryValue}>{workout.duration} min</Text>
           </View>
           <View style={[styles.summaryItem, styles.summaryBorder]}>
             <MaterialIcons name="fitness-center" size={24} color="#ccff00" style={styles.summaryIcon} />
             <Text style={styles.summaryLabel}>Equipment</Text>
-            <Text style={styles.summaryValue}>{workout.equipment}</Text>
+            <Text style={styles.summaryValue} numberOfLines={1}>
+                {Array.isArray(workout.equipment) ? workout.equipment.join(', ') : (workout.equipment || 'None')}
+            </Text>
           </View>
           <View style={styles.summaryItem}>
             <MaterialIcons name="adjust" size={24} color="#ccff00" style={styles.summaryIcon} />
             <Text style={styles.summaryLabel}>Target</Text>
-            <Text style={styles.summaryValue}>{workout.target}</Text>
+            <Text style={styles.summaryValue} numberOfLines={1}>
+                {Array.isArray(workout.targetMuscles) ? workout.targetMuscles.join(', ') : (workout.targetMuscles || 'General')}
+            </Text>
           </View>
         </View>
 
-        {/* Exercise List */}
+        {/* Workout List (Exercise Blocks) */}
         <View style={styles.exercisesContainer}>
-          <View style={styles.exercisesHeader}>
-            <Text style={styles.exercisesTitle}>Exercises ({workout.exercises.length})</Text>
-            <TouchableOpacity>
-              <Text style={styles.previewAllText}>Preview All</Text>
-            </TouchableOpacity>
-          </View>
+            {workout.exercises.map((block, blockIndex) => (
+                <View key={`block-${blockIndex}`} style={styles.exerciseBlock}>
+                    <View style={styles.blockHeader}>
+                        <View style={styles.blockHeaderIndicator} />
+                        <Text style={styles.blockTitle}>Exercise Block {blockIndex + 1}</Text>
+                    </View>
 
-          <View style={styles.exercisesList}>
-            {workout.exercises.map((exercise, index) => (
-              <TouchableOpacity 
-                key={exercise.id} 
-                style={styles.exerciseItem}
-                onPress={() => router.push({
-                  pathname: '/screens/ExerciseDetailScreen',
-                  params: {
-                    exercise: JSON.stringify(exercise)
-                  }
-                })}
-                activeOpacity={0.7}
-              >
-                <View style={styles.exerciseImageContainer}>
-                  <Image source={{ uri: exercise.image }} style={styles.exerciseImage} />
+                    <View style={styles.blockContent}>
+                        {block.sets.map((set, setIndex) => (
+                            <View key={`set-${blockIndex}-${setIndex}`} style={styles.setContainer}>
+                                <Text style={styles.setLabel}>{set.label}</Text>
+                                <View style={styles.movementsList}>
+                                    {set.movements.map((movement, moveIndex) => (
+                                        <TouchableOpacity 
+                                            key={`move-${blockIndex}-${setIndex}-${moveIndex}`} 
+                                            style={styles.movementItem}
+                                            onPress={() => router.push({
+                                                pathname: '/screens/ExerciseDetailScreen',
+                                                params: {
+                                                  exercise: JSON.stringify({
+                                                      ...movement,
+                                                      sets: movement.setsCount,
+                                                      muscles: [movement.category]
+                                                  })
+                                                }
+                                              })}
+                                        >
+                                            <Image source={{ uri: movement.image }} style={styles.movementImage} />
+                                            <View style={styles.movementInfo}>
+                                                <View style={styles.movementHeader}>
+                                                    <Text style={styles.movementName} numberOfLines={1}>{movement.name}</Text>
+                                                    <View style={styles.categoryBadge}>
+                                                        <Text style={styles.categoryText}>{movement.category}</Text>
+                                                    </View>
+                                                </View>
+                                                <Text style={styles.movementDetails}>
+                                                    {movement.setsCount} sets {movement.reps ? `x ${movement.reps} reps` : ''}
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                                {set.rest ? (
+                                    <View style={styles.restContainer}>
+                                        <MaterialIcons name="timer" size={16} color="#ccff00" />
+                                        <Text style={styles.restText}>Rest: {set.rest}s</Text>
+                                    </View>
+                                ) : null}
+                            </View>
+                        ))}
+                    </View>
                 </View>
-                <View style={styles.exerciseContent}>
-                  <Text style={styles.exerciseName}>{exercise.name}</Text>
-                  <Text style={styles.exerciseSets}>{exercise.sets} Sets • {exercise.reps} Reps</Text>
-                  {/* Muscles container removed as data is not available from source */}
-                </View>
-                <MaterialIcons name="drag-indicator" size={24} color="#94a3b8" />
-              </TouchableOpacity>
             ))}
-          </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Bottom CTA */}
+      <View style={styles.bottomCTAContainer}>
+        <TouchableOpacity style={styles.startWorkoutButton}>
+            <Text style={styles.startWorkoutText}>Start Workout</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1f230f',
+    backgroundColor: '#1f230f', // bg-background-dark
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
+  topNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#1f230f',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)', // border-white/10
+  },
+  navButton: {
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  navTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#f1f5f9', // text-slate-100
+    flex: 1,
+    textAlign: 'center',
   },
   scrollView: {
     flex: 1,
     backgroundColor: '#1f230f',
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 100, // Space for bottom CTA
   },
   heroContainer: {
     padding: 16,
     paddingBottom: 12,
   },
-  heroImage: {
+  heroImageWrapper: {
     width: '100%',
     height: 320,
-    justifyContent: 'space-between',
+    borderRadius: 12,
     overflow: 'hidden',
+    backgroundColor: '#334155', // bg-slate-700 placeholder
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'flex-end',
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 12,
-  },
-  backButtonOverlay: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    zIndex: 10,
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 24,
   },
   heroContent: {
     padding: 24,
   },
   levelBadge: {
-    backgroundColor: '#ccff00',
+    backgroundColor: '#ccff00', // bg-primary
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 999,
@@ -440,10 +501,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   levelText: {
-    color: '#1f230f',
+    color: '#1f230f', // text-background-dark
     fontSize: 12,
     fontWeight: 'bold',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   workoutTitle: {
     color: '#ffffff',
@@ -478,13 +540,15 @@ const styles = StyleSheet.create({
   saveToLibraryButton: {
     flex: 1,
     height: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)', // bg-white/10
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   saveToLibraryText: {
-    color: '#ccff00',
+    color: '#ccff00', // text-primary
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -502,7 +566,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.1)', // border-white/10
   },
   summaryItem: {
     flex: 1,
@@ -516,89 +580,165 @@ const styles = StyleSheet.create({
   },
   summaryIcon: {
     marginBottom: 4,
-    color: '#ccff00',
+    color: '#ccff00', // text-primary
   },
   summaryLabel: {
-    color: '#94a3b8',
+    color: '#94a3b8', // text-slate-400
     fontSize: 12,
     marginBottom: 2,
   },
   summaryValue: {
-    color: '#f1f5f9',
+    color: '#f1f5f9', // text-slate-100
     fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
   },
   exercisesContainer: {
     paddingHorizontal: 16,
+    gap: 40, // space-y-10
   },
-  exercisesHeader: {
+  exerciseBlock: {
+    gap: 16, // space-y-4
+  },
+  blockHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
+  },
+  blockHeaderIndicator: {
+    height: 32,
+    width: 4,
+    backgroundColor: '#ccff00',
+  },
+  blockTitle: {
+    fontSize: 24,
+    fontWeight: '900', // font-black
+    textTransform: 'uppercase',
+    fontStyle: 'italic',
+    color: '#f1f5f9', // text-slate-100
+    letterSpacing: -0.5, // tracking-tighter
+  },
+  blockContent: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)', // bg-white/5
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)', // border-white/10
+  },
+  setContainer: {
     marginBottom: 16,
   },
-  exercisesTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#f1f5f9',
+  setLabel: {
+    color: '#ccff00', // text-primary
+    fontSize: 12,
+    fontWeight: '900', // font-black
+    textTransform: 'uppercase',
+    letterSpacing: 2, // tracking-widest
+    marginBottom: 16,
   },
-  previewAllText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#ccff00',
+  movementsList: {
+    gap: 12, // space-y-3
   },
-  exercisesList: {
-    gap: 16,
-  },
-  exerciseItem: {
+  movementItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: '#2d3319', // Lighter background color (lighter than #1f230f)
-    borderRadius: 16, // Slightly rounder corners
+    backgroundColor: '#1f230f', // bg-background-dark (or slightly lighter if needed, but per HTML it's bg-background-dark inside)
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
     gap: 16,
-    marginBottom: 8, // Add spacing between items
     borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.1)', // Subtle green border
+    borderColor: 'rgba(255, 255, 255, 0.05)', // border-white/5
   },
-  exerciseImageContainer: {
-    width: 80,
-    height: 80,
+  movementImage: {
+    width: 64, // size-16
+    height: 64,
     borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#334155',
   },
-  exerciseImage: {
-    width: '100%',
-    height: '100%',
-  },
-  exerciseContent: {
+  movementInfo: {
     flex: 1,
   },
-  exerciseName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#f1f5f9',
-    marginBottom: 4,
-  },
-  exerciseSets: {
-    fontSize: 14,
-    color: '#94a3b8',
-    marginBottom: 8,
-  },
-  musclesContainer: {
+  movementHeader: {
     flexDirection: 'row',
-    gap: 8,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 2,
   },
-  muscleBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 8,
+  movementName: {
+    fontSize: 16, // slightly adjusted
+    fontWeight: 'bold',
+    color: '#f1f5f9', // text-slate-100
+    flex: 1,
+    marginRight: 8,
+  },
+  categoryBadge: {
+    backgroundColor: 'rgba(204, 255, 0, 0.1)', // bg-primary/10
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.2)', // border-primary/20
   },
-  muscleText: {
+  categoryText: {
+    color: '#ccff00', // text-primary (lighter for dark bg)
     fontSize: 10,
-    color: '#f1f5f9',
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  movementDetails: {
+    fontSize: 14,
+    color: '#94a3b8', // text-slate-400
+  },
+  restContainer: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(204, 255, 0, 0.1)', // bg-primary/10
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.4)', // border-primary/40
+    borderStyle: 'dashed',
+    padding: 10,
+    borderRadius: 8,
+  },
+  restText: {
+    fontSize: 12,
+    fontWeight: '900', // font-black
+    color: '#ccff00', // text-primary
+    textTransform: 'uppercase',
+  },
+  bottomCTAContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    backgroundColor: 'rgba(31, 35, 15, 0.95)', // bg-background-dark/95
+    borderTopWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)', // border-white/10
+  },
+  startWorkoutButton: {
+    width: '100%',
+    backgroundColor: '#ccff00', // bg-primary
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#ccff00',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 30,
+    elevation: 5,
+  },
+  startWorkoutText: {
+    color: '#1f230f', // text-background-dark
+    fontSize: 18,
+    fontWeight: '900', // font-black
+    textTransform: 'uppercase',
+    letterSpacing: 2, // tracking-widest
   },
 });
