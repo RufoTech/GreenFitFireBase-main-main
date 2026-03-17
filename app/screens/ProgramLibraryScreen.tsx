@@ -121,7 +121,7 @@ export default function ProgramLibraryScreen() {
         >
           <MaterialIcons name="arrow-back" size={24} color={TEXT_COLOR} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Library</Text>
+        <Text style={styles.headerTitle}>Saved Programs</Text>
         <TouchableOpacity style={styles.menuButton}>
           <MaterialIcons name="more-vert" size={24} color={TEXT_COLOR} />
         </TouchableOpacity>
@@ -215,13 +215,6 @@ export default function ProgramLibraryScreen() {
         )}
         <View style={{ height: 100 }} />
       </ScrollView>
-
-
-      {/* FAB */}
-      <TouchableOpacity style={styles.fab}>
-        <MaterialIcons name="add" size={32} color={BG_DARK} />
-      </TouchableOpacity>
-
     </SafeAreaView>
   );
 }
@@ -390,21 +383,5 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 32,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: PRIMARY,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
 });

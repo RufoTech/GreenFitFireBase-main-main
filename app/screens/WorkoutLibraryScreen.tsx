@@ -128,7 +128,7 @@ export default function WorkoutLibraryScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={28} color={TEXT_DARK} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Workout Library</Text>
+        <Text style={styles.headerTitle}>Exercises Library</Text>
         <View style={styles.headerRight} /> 
       </View>
 

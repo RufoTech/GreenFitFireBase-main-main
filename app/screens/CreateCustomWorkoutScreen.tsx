@@ -5,19 +5,20 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  Dimensions,
-  Image,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View
+    Alert,
+    Dimensions,
+    Image,
+    Modal,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View
 } from 'react-native';
 import { SelectionStore } from '../utils/SelectionStore';
 
@@ -82,6 +83,11 @@ export default function CreateCustomWorkoutScreen() {
 
   const [visibleDropdown, setVisibleDropdown] = useState<string | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{top: number, right: number} | null>(null);
+  
+  // Modal state
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successProgramName, setSuccessProgramName] = useState('');
+  const [successProgramId, setSuccessProgramId] = useState('');
 
   // Check for selected exercise when screen comes into focus
   useFocusEffect(
@@ -358,9 +364,10 @@ export default function CreateCustomWorkoutScreen() {
       const responseData = await response.json();
       console.log("Workout saved via Go backend:", responseData);
 
-      Alert.alert("Success", "Program created successfully!", [
-        { text: "OK", onPress: () => router.back() }
-      ]);
+      setSuccessProgramName(programName);
+      setSuccessProgramId(responseData.id || responseData.workoutId || ''); // Fallback IDs just in case
+      setShowSuccessModal(true);
+
     } catch (error) {
       console.error("Error saving program:", error);
       Alert.alert("Error", "Failed to save program.");
@@ -630,6 +637,72 @@ export default function CreateCustomWorkoutScreen() {
           </TouchableOpacity>
         </View>
       </LinearGradient>
+
+      {/* Success Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showSuccessModal}
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalOverlay}>
+            <View style={[styles.successModal, { backgroundColor: '#12140a', borderColor: 'rgba(204, 255, 0, 0.2)' }]}>
+                {/* Visual Ornament */}
+                <View style={styles.modalHandle} />
+                
+                <View style={styles.successContent}>
+                    {/* Checkmark */}
+                    <View style={styles.checkmarkContainer}>
+                        <MaterialIcons name="check-circle" size={60} color="#ccff00" />
+                    </View>
+
+                    <Text style={[styles.successTitle, { color: '#ffffff' }]}>Program Saved Successfully!</Text>
+                    <Text style={[styles.successMessage, { color: '#a1a1aa' }]}>
+                        {`Your new custom workout "${successProgramName}" is now ready in your library.`}
+                    </Text>
+
+                    <View style={styles.successActions}>
+                        <TouchableOpacity 
+                            style={[styles.successButtonPrimary, { backgroundColor: '#ccff00' }]}
+                            onPress={() => {
+                                setShowSuccessModal(false);
+                                // For custom workouts, maybe route to library or start it directly
+                                router.replace('/screens/MonthlyWorkoutLibraryScreen');
+                            }}
+                        >
+                            <MaterialIcons name="list-alt" size={24} color="#1f230f" />
+                            <Text style={styles.successButtonTextPrimary}>Go to Library</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                            style={[styles.successButtonSecondary, { borderColor: '#ccff00' }]}
+                            onPress={() => {
+                                setShowSuccessModal(false);
+                                router.replace('/(tabs)/');
+                            }}
+                        >
+                            <MaterialIcons name="home" size={24} color="#ccff00" />
+                            <Text style={[styles.successButtonTextSecondary, { color: '#ccff00' }]}>Dashboard</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Optional Thumbnail Card */}
+                <View style={[styles.thumbnailContainer, { backgroundColor: 'rgba(204, 255, 0, 0.05)', borderTopColor: 'rgba(204, 255, 0, 0.1)' }]}>
+                    <View style={styles.thumbnailContent}>
+                        <View style={[styles.thumbnailImage, { borderColor: 'rgba(204, 255, 0, 0.2)', backgroundColor: '#333' }]}>
+                             <MaterialIcons name="fitness-center" size={24} color="#ccff00" />
+                        </View>
+                        <View>
+                            <Text style={[styles.thumbnailTitle, { color: '#ffffff' }]}>{successProgramName}</Text>
+                            <Text style={[styles.thumbnailSubtitle, { color: '#a1a1aa' }]}>Custom Workout • {blocks.reduce((acc, b) => acc + b.sets.reduce((sAcc, s) => sAcc + s.movements.length, 0), 0)} Exercises</Text>
+                        </View>
+                    </View>
+                </View>
+            </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -1005,5 +1078,121 @@ const styles = StyleSheet.create({
     color: '#1f230f',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  // Success Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  successModal: {
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingHorizontal: 24,
+    borderTopWidth: 1,
+    shadowColor: '#ccff00',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 32,
+  },
+  successContent: {
+    alignItems: 'center',
+  },
+  checkmarkContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(204, 255, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: 'rgba(204, 255, 0, 0.2)',
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  successMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+    paddingHorizontal: 16,
+  },
+  successActions: {
+    width: '100%',
+    gap: 12,
+    marginBottom: 24,
+  },
+  successButtonPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+    gap: 8,
+    shadowColor: '#ccff00',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  successButtonTextPrimary: {
+    color: '#12140a',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  successButtonSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+    gap: 8,
+  },
+  successButtonTextSecondary: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  thumbnailContainer: {
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+  },
+  thumbnailContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  thumbnailImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thumbnailTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  thumbnailSubtitle: {
+    fontSize: 12,
   },
 });

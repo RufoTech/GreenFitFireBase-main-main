@@ -6,18 +6,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
-  Dimensions,
-  Image,
-  ImageBackground,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Alert,
+    Dimensions,
+    Image,
+    ImageBackground,
+    Modal,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -53,6 +54,7 @@ export default function DashboardScreen() {
   const user = auth().currentUser;
   
   const [activeProgram, setActiveProgram] = useState<any>(null);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -135,28 +137,15 @@ export default function DashboardScreen() {
   const handleRemoveProgram = async () => {
     if (!user) return;
     
-    Alert.alert(
-      "Remove Program",
-      "Are you sure you want to remove your active program? Your progress within the program will not be deleted, but it will be removed from your dashboard.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Remove", 
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await firestore().collection('users').doc(user.uid).update({
-                activeProgramId: firestore.FieldValue.delete()
-              });
-              // Local state will update automatically via the onSnapshot listener
-            } catch (error) {
-              console.error("Error removing program:", error);
-              Alert.alert("Error", "Could not remove the program. Please try again.");
-            }
-          }
-        }
-      ]
-    );
+    try {
+      await firestore().collection('users').doc(user.uid).update({
+        activeProgramId: firestore.FieldValue.delete()
+      });
+      setDeleteModalVisible(false);
+    } catch (error) {
+      console.error("Error removing program:", error);
+      Alert.alert("Error", "Could not remove the program. Please try again.");
+    }
   };
 
   return (
@@ -382,7 +371,7 @@ export default function DashboardScreen() {
                 {activeProgram && (
                   <TouchableOpacity 
                     style={[styles.createProgramButton, { backgroundColor: 'transparent', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginTop: 8 }]}
-                    onPress={handleRemoveProgram}
+                    onPress={() => setDeleteModalVisible(true)}
                   >
                     <MaterialIcons name="close" size={20} color="#f1f5f9" />
                     <Text style={[styles.createProgramText, { color: '#f1f5f9' }]}>Remove Program</Text>
@@ -428,6 +417,50 @@ export default function DashboardScreen() {
 
       </ScrollView>
 
+      {/* Warning Modal for Deleting Program */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDeleteModalVisible(false)}
+      >
+        <View style={styles.deleteModalOverlay}>
+          <View style={styles.deleteModalCard}>
+            
+            <View style={styles.deleteModalIconContainer}>
+              <View style={styles.deleteModalIconBg}>
+                <MaterialIcons name="warning" size={40} color="#ccff00" />
+              </View>
+            </View>
+
+            <View style={styles.deleteModalTextContent}>
+              <Text style={styles.deleteModalTitle}>Delete Workout?</Text>
+              <Text style={styles.deleteModalDescription}>
+                Are you sure you want to delete this workout? This action cannot be undone.
+              </Text>
+            </View>
+
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity 
+                style={styles.deleteModalYesBtn}
+                onPress={handleRemoveProgram}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.deleteModalYesText}>Delete Workout</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.deleteModalCancelBtn}
+                onPress={() => setDeleteModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.deleteModalCancelText}>Keep Workout</Text>
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+      </Modal>
 
     </SafeAreaView>
   );
@@ -747,27 +780,89 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
   },
-  fabContainer: {
-    position: 'relative',
-    top: -24,
-  },
-  fab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#ccff00',
+  
+  // Delete Modal Styles
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: "#ccff00",
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
-    borderWidth: 4,
+    padding: 24,
+  },
+  deleteModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#12140a',
+    borderRadius: 40,
+    padding: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+    alignItems: 'center',
+  },
+  deleteModalIconContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  deleteModalIconBg: {
+    width: 80,
+    height: 80,
+    backgroundColor: 'rgba(204, 255, 0, 0.1)',
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteModalTextContent: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  deleteModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  deleteModalDescription: {
+    fontSize: 16,
+    color: '#a1a1aa',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  deleteModalActions: {
+    flexDirection: 'column',
+    gap: 12,
+    width: '100%',
+  },
+  deleteModalYesBtn: {
+    width: '100%',
+    backgroundColor: '#ef4444',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  deleteModalYesText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  deleteModalCancelBtn: {
+    width: '100%',
+    backgroundColor: 'transparent',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ccff00',
+  },
+  deleteModalCancelText: {
+    color: '#ccff00',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

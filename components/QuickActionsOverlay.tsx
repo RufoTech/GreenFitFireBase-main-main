@@ -147,28 +147,28 @@ export default function QuickActionsOverlay({ visible, onClose }: QuickActionsOv
               onPress={() => handleActionPress('/screens/LogWeightScreen')}
           />
           <QuickActionButton 
-              title="My Program " 
+              title="Saved Programs" 
               subtitle="" 
               IconComponent={MaterialIcons} 
               iconName="playlist-add-check" 
               onPress={() => handleActionPress('/screens/ProgramLibraryScreen')}
           />
           <QuickActionButton 
-              title="Workout library" 
+              title="Exercises Library" 
               subtitle="" 
               IconComponent={MaterialIcons} 
               iconName="fitness-center" 
               onPress={() => handleActionPress('/screens/WorkoutLibraryScreen')}
           />
           <QuickActionButton 
-              title="Prebuilt exercises" 
+              title="Prebuilt Workouts" 
               subtitle="" 
               IconComponent={MaterialIcons} 
               iconName="dashboard" 
               onPress={() => handleActionPress('/screens/FeaturedRoutinesScreen')}
           />
           <QuickActionButton 
-              title="Custom exercises" 
+              title="Custom Workouts" 
               subtitle="" 
               IconComponent={MaterialIcons} 
               iconName="library-add" 

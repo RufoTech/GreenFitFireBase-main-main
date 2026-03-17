@@ -1,4 +1,4 @@
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -464,6 +464,15 @@ export default function MonthlyWorkoutLibraryScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
+      {/* Empty State / Floating Button omitted */}
+      {!loading && userPrograms.length === 0 && (
+        <View style={styles.emptyState}>
+          <MaterialCommunityIcons name="clipboard-text-outline" size={64} color="rgba(255,255,255,0.2)" />
+          <Text style={styles.emptyStateTitle}>No Programs Yet</Text>
+          <Text style={styles.emptyStateDesc}>Create your first workout program to get started on your fitness journey.</Text>
+        </View>
+      )}
+
       {/* Program Detail Modal */}
       <Modal
         visible={modalVisible}
@@ -495,7 +504,7 @@ export default function MonthlyWorkoutLibraryScreen() {
                      {/* Hero Section */}
                      <View style={styles.heroSection}>
                         <View style={styles.todaysGoalBadge}>
-                            <Text style={styles.todaysGoalText}>TODAY'S GOAL</Text>
+                            <Text style={styles.todaysGoalText}>{"TODAY'S GOAL"}</Text>
                         </View>
                         <Text style={styles.heroTitle}>Ready to start your workout?</Text>
                      </View>
@@ -854,6 +863,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#94a3b8',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 64,
+    paddingHorizontal: 24,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#f1f5f9',
+    marginTop: 16,
+  },
+  emptyStateDesc: {
+    fontSize: 14,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
   },
   modalContainer: {
     flex: 1,
