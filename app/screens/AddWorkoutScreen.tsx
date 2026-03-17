@@ -98,7 +98,7 @@ export default function AddWorkoutScreen() {
                     duration: data.duration || '0',
                     exercises: data.exerciseCount || (data.exercises ? data.exercises.reduce((acc: number, block: any) => acc + (block.sets ? block.sets.reduce((sAcc: number, set: any) => sAcc + (set.movements ? set.movements.length : 0), 0) : 0), 0) : 0),
                     level: data.level || 'Custom',
-                    levelColor: '#a855f7', // Purple for custom
+                    levelColor: '#ccff00', // Green for custom
                     image: data.image || 'https://via.placeholder.com/300',
                     category: 'Custom',
                     targetMuscle: data.target || 'Full Body'
@@ -305,9 +305,9 @@ export default function AddWorkoutScreen() {
                   {/* Header Section */}
                   <View style={styles.noImageHeader}>
                     <View style={styles.noImageHeaderLeft}>
-                      <Text style={[styles.noImageLevelText, { color: workout.levelColor || '#ccff00' }]}>
-                        {workout.level}
-                      </Text>
+                      <View style={[styles.levelBadge, { backgroundColor: workout.levelColor || '#ccff00', position: 'relative', top: 0, left: 0, marginBottom: 8 }]}>
+                        <Text style={styles.levelText}>{workout.level}</Text>
+                      </View>
                       <Text style={styles.noImageTitle}>{workout.title}</Text>
                     </View>
                     {workout.category === 'Custom' && (
