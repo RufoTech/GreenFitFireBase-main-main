@@ -42,7 +42,6 @@ export default function WorkoutCompleteScreen() {
           >
             <MaterialIcons name="close" size={24} color={TEXT_LIGHT} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>GreenFit</Text>
           <View style={styles.iconButton}>
             <MaterialIcons name="battery-charging-full" size={24} color={PRIMARY} />
           </View>
@@ -55,7 +54,7 @@ export default function WorkoutCompleteScreen() {
               <Text style={styles.badgeText}>SUCCESS</Text>
             </View>
             <Text style={styles.heroTitle}>WORKOUT COMPLETE!</Text>
-            <Text style={styles.heroSubtitle}>MƏŞQ TAMAMLANDI!</Text>
+            <Text style={styles.heroSubtitle}>Congratulations</Text>
           </View>
 
           {/* Central Graphic */}
