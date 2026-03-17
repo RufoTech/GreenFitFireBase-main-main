@@ -59,7 +59,7 @@ interface WorkoutDetails {
 
 export default function WorkoutDetailsScreen() {
   const router = useRouter();
-  const { id, isCustom } = useLocalSearchParams();
+  const { id, isCustom, hideAddToDay } = useLocalSearchParams();
   const [workout, setWorkout] = useState<WorkoutDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
@@ -330,10 +330,12 @@ export default function WorkoutDetailsScreen() {
 
         {/* Action Buttons */}
         <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity style={styles.addToDayButton}>
-            <Text style={styles.addToDayText}>Add to Day</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
+          {hideAddToDay !== 'true' && (
+            <TouchableOpacity style={styles.addToDayButton}>
+              <Text style={styles.addToDayText}>Add to Day</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity  
             style={[styles.saveToLibraryButton, isSaved && styles.savedButton]}
             onPress={handleToggleLibrary}
           >

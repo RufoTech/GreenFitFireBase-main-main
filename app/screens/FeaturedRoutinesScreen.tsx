@@ -213,7 +213,8 @@ export default function FeaturedRoutinesScreen() {
                     pathname: '/screens/WorkoutDetailsScreen',
                     params: { 
                       id: workout.id,
-                      isCustom: 'false'
+                      isCustom: 'false',
+                      hideAddToDay: 'true'
                     }
                   })}
                 >

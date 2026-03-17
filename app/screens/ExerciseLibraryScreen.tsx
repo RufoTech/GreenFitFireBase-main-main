@@ -151,7 +151,8 @@ export default function ExerciseLibraryScreen() {
                             pathname: '/screens/WorkoutDetailsScreen',
                             params: { 
                               id: workout.id,
-                              isCustom: 'true'
+                              isCustom: 'true',
+                              hideAddToDay: 'true'
                             }
                         });
                     }
@@ -194,9 +195,10 @@ export default function ExerciseLibraryScreen() {
                             router.push({
                                 pathname: '/screens/WorkoutDetailsScreen',
                                 params: { 
-                                  id: workout.id,
-                                  isCustom: 'true'
-                                }
+                              id: workout.id,
+                              isCustom: 'true',
+                              hideAddToDay: 'true'
+                            }
                             });
                         }
                       }}
@@ -219,7 +221,8 @@ export default function ExerciseLibraryScreen() {
                             pathname: '/screens/WorkoutDetailsScreen',
                             params: { 
                               id: workout.id,
-                              isCustom: 'true'
+                              isCustom: 'true',
+                              hideAddToDay: 'true'
                             }
                         });
                     }
@@ -266,9 +269,10 @@ export default function ExerciseLibraryScreen() {
                             router.push({
                                 pathname: '/screens/WorkoutDetailsScreen',
                                 params: { 
-                                  id: workout.id,
-                                  isCustom: 'true'
-                                }
+                              id: workout.id,
+                              isCustom: 'true',
+                              hideAddToDay: 'true'
+                            }
                             });
                         }
                     }}
