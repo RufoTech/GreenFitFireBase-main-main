@@ -1,4 +1,4 @@
-import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import firestore from '@react-native-firebase/firestore';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -336,13 +336,6 @@ export default function CreateProgramScreen() {
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.text }]}>Create Program</Text>
         </View>
-        {/* Added theme toggle for testing, though not in HTML design specifically, it's good for dev */}
-        <TouchableOpacity 
-          style={[styles.iconButton]}
-          onPress={() => setIsDark(!isDark)}
-        >
-          {isDark ? <Feather name="sun" size={20} color={theme.subtext} /> : <Feather name="moon" size={20} color={theme.subtext} />}
-        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>

@@ -292,7 +292,7 @@ export default function WorkoutDetailsScreen() {
          >
             <MaterialIcons name="arrow-back" size={24} color="#f1f5f9" />
          </TouchableOpacity>
-         <Text style={styles.navTitle}>Workout Details</Text>
+         <Text style={styles.navTitle}>Workout Dsetails</Text>
          <TouchableOpacity 
             style={styles.navButton}
             onPress={handleShare}
@@ -423,13 +423,6 @@ export default function WorkoutDetailsScreen() {
             ))}
         </View>
       </ScrollView>
-
-      {/* Bottom CTA */}
-      <View style={styles.bottomCTAContainer}>
-        <TouchableOpacity style={styles.startWorkoutButton}>
-            <Text style={styles.startWorkoutText}>Start Workout</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -468,7 +461,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1f230f',
   },
   scrollContent: {
-    paddingBottom: 100, // Space for bottom CTA
+    paddingBottom: 40,
   },
   heroContainer: {
     padding: 16,
@@ -711,34 +704,5 @@ const styles = StyleSheet.create({
     fontWeight: '900', // font-black
     color: '#ccff00', // text-primary
     textTransform: 'uppercase',
-  },
-  bottomCTAContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    backgroundColor: 'rgba(31, 35, 15, 0.95)', // bg-background-dark/95
-    borderTopWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)', // border-white/10
-  },
-  startWorkoutButton: {
-    width: '100%',
-    backgroundColor: '#ccff00', // bg-primary
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#ccff00',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 30,
-    elevation: 5,
-  },
-  startWorkoutText: {
-    color: '#1f230f', // text-background-dark
-    fontSize: 18,
-    fontWeight: '900', // font-black
-    textTransform: 'uppercase',
-    letterSpacing: 2, // tracking-widest
   },
 });

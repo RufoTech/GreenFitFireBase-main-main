@@ -1,22 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
+import firestore from '@react-native-firebase/firestore';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
+  Dimensions,
+  ImageBackground,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
-  View,
-  SafeAreaView,
-  StatusBar,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
   TextInput,
-  ImageBackground,
-  Dimensions,
-  ActivityIndicator
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import firestore from '@react-native-firebase/firestore';
 
 const { width } = Dimensions.get('window');
 
@@ -217,8 +217,8 @@ export default function FeaturedRoutinesScreen() {
                     }
                   })}
                 >
-                  <Text style={styles.startButtonText}>Start Workout</Text>
-                  <MaterialIcons name="play-circle-filled" size={20} color={BACKGROUND_DARK} />
+                  <Text style={styles.startButtonText}>Workout Details</Text>
+                  <MaterialIcons name="chevron-right" size={24} color={BACKGROUND_DARK} />
                 </TouchableOpacity>
               </View>
             </View>

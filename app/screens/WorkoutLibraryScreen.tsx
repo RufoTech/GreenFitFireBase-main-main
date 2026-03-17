@@ -1,21 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
+import firestore from '@react-native-firebase/firestore';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
-  View,
-  SafeAreaView,
-  StatusBar,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
   TextInput,
-  Image,
-  Dimensions,
-  ActivityIndicator
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import firestore from '@react-native-firebase/firestore';
 
 const { width } = Dimensions.get('window');
 
@@ -129,7 +129,7 @@ export default function WorkoutLibraryScreen() {
           <MaterialIcons name="arrow-back" size={28} color={TEXT_DARK} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Workout Library</Text>
-        <View style={{ width: 48 }} /> 
+        <View style={styles.headerRight} /> 
       </View>
 
       {/* Search Bar */}
@@ -256,11 +256,6 @@ export default function WorkoutLibraryScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* FAB */}
-      <TouchableOpacity style={styles.fab}>
-        <MaterialIcons name="add" size={32} color={BACKGROUND_DARK} />
-      </TouchableOpacity>
-
     </SafeAreaView>
   );
 }
@@ -291,7 +286,9 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     textAlign: 'center',
     flex: 1,
-    marginRight: 48, // Balance the back button
+  },
+  headerRight: {
+    width: 48,
   },
   searchContainer: {
     paddingHorizontal: 16,
@@ -471,21 +468,5 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: PRIMARY,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
   },
 });
