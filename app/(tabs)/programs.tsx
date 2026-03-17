@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,16 +10,117 @@ import {
   Platform,
   Image,
   Dimensions,
-  ImageBackground
+  ImageBackground,
+  Alert
 } from 'react-native';
 import { MaterialIcons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 
 const { width } = Dimensions.get('window');
 
 export default function ProgramsScreen() {
   const router = useRouter();
+  const [activeProgram, setActiveProgram] = useState<any>(null);
+  const user = auth().currentUser;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+
+      const unsubscribeUser = firestore()
+        .collection('users')
+        .doc(user.uid)
+        .onSnapshot(async (doc) => {
+          if (doc.exists) {
+            const userData = doc.data();
+            if (userData?.activeProgramId) {
+              try {
+                const programDoc = await firestore()
+                  .collection('user_programs')
+                  .doc(userData.activeProgramId)
+                  .get();
+                
+                if (programDoc.exists) {
+                  const data: any = programDoc.data();
+                  let workoutCount = typeof data.workoutCount === 'number' ? data.workoutCount : 0;
+                  let totalDuration = typeof data.totalDuration === 'number' ? data.totalDuration : 0;
+
+                  if (data.weeks && (workoutCount === 0 || totalDuration === 0)) {
+                    const weeks = Object.values(data.weeks);
+                    for (const week of weeks as any[]) {
+                      if (Array.isArray(week)) {
+                        for (const day of week) {
+                          if (day?.type === 'workout') {
+                            workoutCount += 1;
+                            if (day?.subtitle) {
+                              const parts = String(day.subtitle).split('•');
+                              if (parts.length > 1) {
+                                const dur = parseInt(parts[1], 10);
+                                if (!isNaN(dur)) totalDuration += dur;
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+
+                  let levelColor = '#ccff00';
+                  if (data.focus === 'Lose Weight') levelColor = '#3b82f6';
+                  else if (data.focus === 'Get Stronger') levelColor = '#ef4444';
+
+                  setActiveProgram({ 
+                    id: programDoc.id, 
+                    ...data,
+                    level: data.focus || 'General',
+                    levelColor: levelColor,
+                    workoutCount,
+                    totalDuration
+                  });
+                } else {
+                  setActiveProgram(null);
+                }
+              } catch (error) {
+                console.error("Error fetching active program:", error);
+              }
+            } else {
+              setActiveProgram(null);
+            }
+          }
+        });
+
+      return () => unsubscribeUser();
+    }, [user])
+  );
+
+  const handleRemoveProgram = async () => {
+    if (!user) return;
+    
+    Alert.alert(
+      "Remove Program",
+      "Are you sure you want to remove your active program? Your progress within the program will not be deleted, but it will be removed from your dashboard.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Remove", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await firestore().collection('users').doc(user.uid).update({
+                activeProgramId: firestore.FieldValue.delete()
+              });
+            } catch (error) {
+              console.error("Error removing program:", error);
+              Alert.alert("Error", "Could not remove the program. Please try again.");
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const recommendedPrograms = [
     {
@@ -61,42 +162,90 @@ export default function ProgramsScreen() {
           <Text style={styles.sectionLabel}>YOUR PROGRAM</Text>
           
           <TouchableOpacity 
-            style={styles.activeProgramCard}
+            style={[styles.workoutCard, { borderColor: 'rgba(204, 255, 0, 0.1)' }]}
             activeOpacity={0.9}
-            onPress={() => router.push('/screens/CreateProgramScreen')}
+            onPress={() => {
+              if (activeProgram?.id) {
+                router.push({ pathname: '/screens/WeeklyProgramScreen', params: { programId: activeProgram.id } });
+              } else {
+                router.push('/screens/CreateProgramScreen');
+              }
+            }}
           >
             <ImageBackground
-              source={{ uri: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&q=80&w=800' }}
-              style={styles.activeImageBackground}
-              imageStyle={{ borderRadius: 24 }}
+              source={{ uri: activeProgram?.coverImage || activeProgram?.image || 'https://lh3.googleusercontent.com/aida-public/AB6AXuCI3xrdrlqpd6zybsFzh1uoDJW_RAThN-65xFUKUjIeLQpnVnoiBdvHicM2Wbj3MXYdOpqO6j1E4pWY7v1pknlmw5HdeqLDK4incQqa9CJ1ohskwTOTK2lKi8S9Qut8s28hZ1Vj4kHJ0aLsON8HKXM8Z18gFXJvw3nD8r0vvUpsAklNhALnZgZNUuJmw900bxjwFNxIGpFWSFYAR35orgrs2JlRxN-pYuZbTYcTVDChxhRA_3JnNbcYqDUf7MyxIt5HdTKhCvsfG_o' }}
+              style={styles.workoutImage}
             >
               <LinearGradient
-                colors={['rgba(31, 35, 15, 0.3)', 'rgba(31, 35, 15, 0.9)']}
-                style={styles.activeGradient}
-              >
-                <View style={styles.activeContent}>
-                  <View style={styles.activeHeader}>
-                    <View style={styles.activeTitleContainer}>
-                      <Text style={styles.activeTitle}>Create Your Plan</Text>
-                      <Text style={styles.activeSubtitle}>Start your journey today</Text>
-                    </View>
-                    <TouchableOpacity style={styles.continueButton}>
-                      <MaterialIcons name="add" size={20} color="#1f230f" />
-                      <Text style={styles.continueButtonText}>Create</Text>
-                    </TouchableOpacity>
+                colors={['rgba(2, 6, 23, 0.9)', 'rgba(2, 6, 23, 0.4)', 'transparent']}
+                start={{ x: 0, y: 1 }}
+                end={{ x: 0, y: 0 }}
+                style={styles.workoutGradient}
+              />
+              <View style={styles.workoutContent}>
+                <View style={styles.startBadgeContainer}>
+                  <View style={[styles.startBadge, activeProgram?.levelColor ? { backgroundColor: activeProgram.levelColor } : {}]}>
+                    <Text style={[styles.startBadgeText, { color: activeProgram?.levelColor ? '#1f230f' : '#1f230f' }]}>{activeProgram?.level?.toUpperCase() || (activeProgram ? 'CONTINUE' : "LET'S START")}</Text>
                   </View>
-
-                  <View style={styles.progressContainer}>
-                    <View style={styles.progressHeader}>
-                      <Text style={styles.progressLabel}>PROGRESS</Text>
-                      <Text style={styles.progressValue}>0%</Text>
-                    </View>
-                    <View style={styles.progressBarBg}>
-                      <View style={[styles.progressBarFill, { width: '0%' }]} />
-                    </View>
+                  <View style={styles.clockContainer}>
+                    {activeProgram ? null : (
+                      <>
+                        <Feather name="clock" size={12} color="#cbd5e1" />
+                        <Text style={styles.clockText}>{"Let's Start"}</Text>
+                      </>
+                    )}
                   </View>
                 </View>
-              </LinearGradient>
+                
+                <Text style={styles.workoutTitle}>{activeProgram?.name || 'Your First Program'}</Text>
+                
+                {activeProgram ? (
+                  <View style={styles.metaRow}>
+                    <View style={styles.metaItem}>
+                      <MaterialIcons name="fitness-center" size={14} color="#1f230f" />
+                      <Text style={styles.metaText}>{activeProgram.weeks ? Object.keys(activeProgram.weeks).length : 4} Weeks</Text>
+                    </View>
+                    <View style={styles.metaItem}>
+                      <MaterialIcons name="list-alt" size={14} color="#1f230f" />
+                      <Text style={styles.metaText}>{activeProgram.exercises || `${activeProgram.workoutCount || 0} workouts`}</Text>
+                    </View>
+                    {activeProgram.totalDuration ? (
+                      <View style={styles.metaItem}>
+                        <Feather name="clock" size={12} color="#1f230f" />
+                        <Text style={styles.metaText}>{activeProgram.totalDuration} mins/week</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : (
+                  <Text style={styles.workoutDescription} numberOfLines={1}>
+                    Design your personalized training plan to get started on your fitness journey.
+                  </Text>
+                )}
+                
+                <TouchableOpacity 
+                  style={styles.createProgramButton}
+                  onPress={() => {
+                    if (activeProgram?.id) {
+                      router.push({ pathname: '/screens/WeeklyProgramScreen', params: { programId: activeProgram.id } });
+                    } else {
+                      router.push('/screens/CreateProgramScreen');
+                    }
+                  }}
+                >
+                  <MaterialIcons name="play-arrow" size={20} color="#1f230f" />
+                  <Text style={styles.createProgramText}>{activeProgram ? 'Continue Program' : 'Create Training Program'}</Text>
+                </TouchableOpacity>
+
+                {activeProgram && (
+                  <TouchableOpacity 
+                    style={[styles.createProgramButton, { backgroundColor: 'transparent', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginTop: 8 }]}
+                    onPress={handleRemoveProgram}
+                  >
+                    <MaterialIcons name="close" size={20} color="#f1f5f9" />
+                    <Text style={[styles.createProgramText, { color: '#f1f5f9' }]}>Remove Program</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </ImageBackground>
           </TouchableOpacity>
         </View>
@@ -216,96 +365,113 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textTransform: 'uppercase',
   },
-  activeProgramCard: {
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.1)',
+  workoutCard: {
+    height: 240,
+    borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-    height: 250,
+    position: 'relative',
+    borderWidth: 1,
   },
-  activeImageBackground: {
+  workoutImage: {
     width: '100%',
     height: '100%',
   },
-  activeGradient: {
-    width: '100%',
+  workoutGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     height: '100%',
-    justifyContent: 'flex-end',
   },
-  activeContent: {
-    padding: 24,
+  workoutContent: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
-  activeHeader: {
+  startBadgeContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: 24,
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
   },
-  activeTitleContainer: {
-    flex: 1,
-  },
-  activeTitle: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: '900',
-    marginBottom: 4,
-  },
-  activeSubtitle: {
-    color: '#ccff00',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  continueButton: {
+  startBadge: {
     backgroundColor: '#ccff00',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  startBadgeText: {
+    color: '#1f230f',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  clockContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  continueButtonText: {
+  clockText: {
+    color: '#cbd5e1',
+    fontSize: 12,
+  },
+  workoutTitle: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  workoutDescription: {
+    color: '#cbd5e1',
+    fontSize: 14,
+    fontWeight: '400',
+    marginBottom: 16,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ccff00',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  metaText: {
+    color: '#1f230f',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  metaDot: {
+    color: '#64748b',
+    fontSize: 12,
+  },
+  createProgramButton: {
+    backgroundColor: '#ccff00',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+    marginTop: 8,
+  },
+  createProgramText: {
     color: '#1f230f',
     fontSize: 14,
-    fontWeight: '900',
-  },
-  progressContainer: {
-    gap: 8,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  progressLabel: {
-    color: '#94a3b8',
-    fontSize: 10,
     fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  progressValue: {
-    color: '#ccff00',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  progressBarBg: {
-    height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 6,
-    padding: 2,
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#ccff00',
-    borderRadius: 4,
   },
   quickActionsGrid: {
     flexDirection: 'row',
