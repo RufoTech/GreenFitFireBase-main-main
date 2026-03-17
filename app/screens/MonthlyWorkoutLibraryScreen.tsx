@@ -501,10 +501,24 @@ export default function MonthlyWorkoutLibraryScreen() {
                         <TouchableOpacity 
                             style={styles.startNowButton}
                             activeOpacity={0.8}
-                            onPress={() => {
+                            onPress={async () => {
                                 setModalVisible(false);
                                 if (selectedProgram?.id) {
-                                  router.push({ pathname: '/screens/WeeklyProgramScreen', params: { programId: selectedProgram.id } });
+                                  try {
+                                    const user = auth().currentUser;
+                                    if (user) {
+                                      // Save the selected program ID as the user's active program
+                                      await firestore()
+                                        .collection('users')
+                                        .doc(user.uid)
+                                        .set({ activeProgramId: selectedProgram.id }, { merge: true });
+                                    }
+                                  } catch (error) {
+                                    console.error("Error setting active program:", error);
+                                  }
+                                  
+                                  // Navigate to Dashboard
+                                  router.replace('/(tabs)/');
                                 }
                             }}
                         >

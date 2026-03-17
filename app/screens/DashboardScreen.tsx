@@ -1,9 +1,10 @@
-import { Feather, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -50,6 +51,79 @@ export default function DashboardScreen() {
   const [isDark, setIsDark] = useState(true);
   const currentTheme = isDark ? theme.dark : theme.light;
   const user = auth().currentUser;
+  
+  const [activeProgram, setActiveProgram] = useState<any>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+
+      const unsubscribeUser = firestore()
+        .collection('users')
+        .doc(user.uid)
+        .onSnapshot(async (doc) => {
+          if (doc.exists) {
+            const userData = doc.data();
+            if (userData?.activeProgramId) {
+              // Fetch the active program details
+              try {
+                const programDoc = await firestore()
+                  .collection('user_programs')
+                  .doc(userData.activeProgramId)
+                  .get();
+                
+                if (programDoc.exists) {
+                  const data: any = programDoc.data();
+                  let workoutCount = typeof data.workoutCount === 'number' ? data.workoutCount : 0;
+                  let totalDuration = typeof data.totalDuration === 'number' ? data.totalDuration : 0;
+
+                  if (data.weeks && (workoutCount === 0 || totalDuration === 0)) {
+                    const weeks = Object.values(data.weeks);
+                    for (const week of weeks as any[]) {
+                      if (Array.isArray(week)) {
+                        for (const day of week) {
+                          if (day?.type === 'workout') {
+                            workoutCount += 1;
+                            if (day?.subtitle) {
+                              const parts = String(day.subtitle).split('•');
+                              if (parts.length > 1) {
+                                const dur = parseInt(parts[1], 10);
+                                if (!isNaN(dur)) totalDuration += dur;
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+
+                  let levelColor = theme.light.primary;
+                  if (data.focus === 'Lose Weight') levelColor = '#3b82f6';
+                  else if (data.focus === 'Get Stronger') levelColor = '#ef4444';
+
+                  setActiveProgram({ 
+                    id: programDoc.id, 
+                    ...data,
+                    level: data.focus || 'General',
+                    levelColor: levelColor,
+                    workoutCount,
+                    totalDuration
+                  });
+                } else {
+                  setActiveProgram(null);
+                }
+              } catch (error) {
+                console.error("Error fetching active program:", error);
+              }
+            } else {
+              setActiveProgram(null);
+            }
+          }
+        });
+
+      return () => unsubscribeUser();
+    }, [user])
+  );
 
   // GoogleSignin'i yapılandır
   useEffect(() => {
@@ -58,15 +132,31 @@ export default function DashboardScreen() {
     });
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await GoogleSignin.signOut(); // Google oturumunu kapat
-      await auth().signOut(); // Firebase oturumunu kapat
-      router.replace('/login'); // Login ekranına yönlendir
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Failed to log out');
-    }
+  const handleRemoveProgram = async () => {
+    if (!user) return;
+    
+    Alert.alert(
+      "Remove Program",
+      "Are you sure you want to remove your active program? Your progress within the program will not be deleted, but it will be removed from your dashboard.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Remove", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await firestore().collection('users').doc(user.uid).update({
+                activeProgramId: firestore.FieldValue.delete()
+              });
+              // Local state will update automatically via the onSnapshot listener
+            } catch (error) {
+              console.error("Error removing program:", error);
+              Alert.alert("Error", "Could not remove the program. Please try again.");
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -209,15 +299,24 @@ export default function DashboardScreen() {
         {/* Featured Workout Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitleLarge, { color: currentTheme.text }]}>Today's Workout</Text>
+            <Text style={[styles.sectionTitleLarge, { color: currentTheme.text }]}>
+              {"Today's Workout"}
+            </Text>
           </View>
           
           <TouchableOpacity 
             style={[styles.workoutCard, { borderColor: isDark ? 'rgba(204, 255, 0, 0.1)' : '#e2e8f0' }]}
             activeOpacity={0.9}
+            onPress={() => {
+              if (activeProgram?.id) {
+                router.push({ pathname: '/screens/WeeklyProgramScreen', params: { programId: activeProgram.id } });
+              } else {
+                router.push('/screens/CreateProgramScreen');
+              }
+            }}
           >
             <ImageBackground
-              source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCI3xrdrlqpd6zybsFzh1uoDJW_RAThN-65xFUKUjIeLQpnVnoiBdvHicM2Wbj3MXYdOpqO6j1E4pWY7v1pknlmw5HdeqLDK4incQqa9CJ1ohskwTOTK2lKi8S9Qut8s28hZ1Vj4kHJ0aLsON8HKXM8Z18gFXJvw3nD8r0vvUpsAklNhALnZgZNUuJmw900bxjwFNxIGpFWSFYAR35orgrs2JlRxN-pYuZbTYcTVDChxhRA_3JnNbcYqDUf7MyxIt5HdTKhCvsfG_o' }}
+              source={{ uri: activeProgram?.coverImage || activeProgram?.image || 'https://lh3.googleusercontent.com/aida-public/AB6AXuCI3xrdrlqpd6zybsFzh1uoDJW_RAThN-65xFUKUjIeLQpnVnoiBdvHicM2Wbj3MXYdOpqO6j1E4pWY7v1pknlmw5HdeqLDK4incQqa9CJ1ohskwTOTK2lKi8S9Qut8s28hZ1Vj4kHJ0aLsON8HKXM8Z18gFXJvw3nD8r0vvUpsAklNhALnZgZNUuJmw900bxjwFNxIGpFWSFYAR35orgrs2JlRxN-pYuZbTYcTVDChxhRA_3JnNbcYqDUf7MyxIt5HdTKhCvsfG_o' }}
               style={styles.workoutImage}
             >
               <LinearGradient
@@ -228,27 +327,67 @@ export default function DashboardScreen() {
               />
               <View style={styles.workoutContent}>
                 <View style={styles.startBadgeContainer}>
-                  <View style={styles.startBadge}>
-                    <Text style={styles.startBadgeText}>LET'S START</Text>
+                  <View style={[styles.startBadge, activeProgram?.levelColor ? { backgroundColor: activeProgram.levelColor } : {}]}>
+                    <Text style={[styles.startBadgeText, { color: activeProgram?.levelColor ? '#1f230f' : '#1f230f' }]}>{activeProgram?.level?.toUpperCase() || (activeProgram ? 'CONTINUE' : "LET'S START")}</Text>
                   </View>
                   <View style={styles.clockContainer}>
-                    <Feather name="clock" size={12} color="#cbd5e1" />
-                    <Text style={styles.clockText}>Let's Start</Text>
+                    {activeProgram ? null : (
+                      <>
+                        <Feather name="clock" size={12} color="#cbd5e1" />
+                        <Text style={styles.clockText}>{"Let's Start"}</Text>
+                      </>
+                    )}
                   </View>
                 </View>
                 
-                <Text style={styles.workoutTitle}>Your First Program</Text>
-                <Text style={styles.workoutDescription} numberOfLines={1}>
-                  Design your personalized training plan to get started on your fitness journey.
-                </Text>
+                <Text style={styles.workoutTitle}>{activeProgram?.name || 'Your First Program'}</Text>
+                
+                {activeProgram ? (
+                  <View style={styles.metaRow}>
+                    <View style={styles.metaItem}>
+                      <MaterialIcons name="fitness-center" size={14} color="#1f230f" />
+                      <Text style={styles.metaText}>{activeProgram.weeks ? Object.keys(activeProgram.weeks).length : 4} Weeks</Text>
+                    </View>
+                    <View style={styles.metaItem}>
+                      <MaterialIcons name="list-alt" size={14} color="#1f230f" />
+                      <Text style={styles.metaText}>{activeProgram.exercises || `${activeProgram.workoutCount || 0} workouts`}</Text>
+                    </View>
+                    {activeProgram.totalDuration ? (
+                      <View style={styles.metaItem}>
+                        <Feather name="clock" size={12} color="#1f230f" />
+                        <Text style={styles.metaText}>{activeProgram.totalDuration} mins/week</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : (
+                  <Text style={styles.workoutDescription} numberOfLines={1}>
+                    Design your personalized training plan to get started on your fitness journey.
+                  </Text>
+                )}
                 
                 <TouchableOpacity 
                   style={styles.createProgramButton}
-                  onPress={() => router.push('/screens/CreateProgramScreen')}
+                  onPress={() => {
+                    if (activeProgram?.id) {
+                      router.push({ pathname: '/screens/WeeklyProgramScreen', params: { programId: activeProgram.id } });
+                    } else {
+                      router.push('/screens/CreateProgramScreen');
+                    }
+                  }}
                 >
                   <MaterialIcons name="play-arrow" size={20} color="#1f230f" />
-                  <Text style={styles.createProgramText}>Create Training Program</Text>
+                  <Text style={styles.createProgramText}>{activeProgram ? 'Continue Program' : 'Create Training Program'}</Text>
                 </TouchableOpacity>
+
+                {activeProgram && (
+                  <TouchableOpacity 
+                    style={[styles.createProgramButton, { backgroundColor: 'transparent', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginTop: 8 }]}
+                    onPress={handleRemoveProgram}
+                  >
+                    <MaterialIcons name="close" size={20} color="#f1f5f9" />
+                    <Text style={[styles.createProgramText, { color: '#f1f5f9' }]}>Remove Program</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </ImageBackground>
           </TouchableOpacity>
@@ -451,7 +590,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   workoutCard: {
-    height: 220,
+    height: 240,
     borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
@@ -470,10 +609,13 @@ const styles = StyleSheet.create({
   },
   workoutContent: {
     position: 'absolute',
+    top: 0,
     bottom: 0,
     left: 0,
     right: 0,
     padding: 20,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   startBadgeContainer: {
     flexDirection: 'row',
@@ -514,11 +656,37 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     marginBottom: 16,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ccff00',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  metaText: {
+    color: '#1f230f',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  metaDot: {
+    color: '#64748b',
+    fontSize: 12,
+  },
   createProgramButton: {
     backgroundColor: '#ccff00',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'stretch',
     paddingVertical: 12,
     borderRadius: 8,
     gap: 8,
