@@ -122,29 +122,32 @@ export default function ProgramsScreen() {
     );
   };
 
-  const recommendedPrograms = [
-    {
-      id: 1,
-      title: "Power Lifting 101",
-      level: "Advanced",
-      duration: "8 Weeks",
-      image: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=400"
-    },
-    {
-      id: 2,
-      title: "Morning Mobility",
-      level: "Beginner",
-      duration: "4 Weeks",
-      image: "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&q=80&w=400"
-    },
-    {
-      id: 3,
-      title: "HIIT Burn",
-      level: "Intermediate",
-      duration: "6 Weeks",
-      image: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&q=80&w=400"
-    }
-  ];
+  const [recommendedPrograms, setRecommendedPrograms] = useState<any[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const fetchRecommendations = async () => {
+        try {
+          const snapshot = await firestore()
+            .collection('recommendations')
+            .orderBy('recommendedRank', 'desc')
+            .limit(5)
+            .get();
+          
+          const programs = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          
+          setRecommendedPrograms(programs);
+        } catch (error) {
+          console.error("Error fetching recommendations:", error);
+        }
+      };
+
+      fetchRecommendations();
+    }, [])
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -277,9 +280,22 @@ export default function ProgramsScreen() {
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recommendedContainer}>
             {recommendedPrograms.map((program) => (
-              <TouchableOpacity key={program.id} style={styles.recommendedCard}>
+              <TouchableOpacity 
+                key={program.id} 
+                style={styles.recommendedCard}
+                onPress={() => router.push({
+                  pathname: '/screens/WorkoutDetailsScreen',
+                  params: {
+                    id: program.programId,
+                    programId: program.programId,
+                    type: 'program',
+                    workoutId: program.exerciseId, // Using exerciseId as workoutId if needed
+                    isRecommended: 'true'
+                  }
+                })}
+              >
                 <View style={styles.recommendedImageContainer}>
-                  <Image source={{ uri: program.image }} style={styles.recommendedImage} />
+                  <Image source={{ uri: program.coverImage }} style={styles.recommendedImage} />
                   <LinearGradient
                     colors={['rgba(0,0,0,0.1)', 'transparent']}
                     style={styles.imageOverlay}
@@ -290,10 +306,10 @@ export default function ProgramsScreen() {
                 </View>
                 
                 <View style={styles.recommendedContent}>
-                  <Text style={styles.recommendedTitle}>{program.title}</Text>
+                  <Text style={styles.recommendedTitle}>{program.name}</Text>
                   <View style={styles.durationContainer}>
                     <Feather name="clock" size={14} color="#ccff00" />
-                    <Text style={styles.durationText}>{program.duration}</Text>
+                    <Text style={styles.durationText}>{program.duration} mins</Text>
                   </View>
                 </View>
               </TouchableOpacity>

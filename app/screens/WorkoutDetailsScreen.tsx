@@ -5,18 +5,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  Image,
-  ImageBackground,
-  Platform,
-  ScrollView,
-  Share,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    ImageBackground,
+    Platform,
+    ScrollView,
+    Share,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SelectionStore } from '../utils/SelectionStore';
 
@@ -61,7 +61,7 @@ interface WorkoutDetails {
 
 export default function WorkoutDetailsScreen() {
   const router = useRouter();
-  const { id, isCustom, hideAddToDay } = useLocalSearchParams();
+  const { id, isCustom, hideAddToDay, isRecommended } = useLocalSearchParams();
   const [workout, setWorkout] = useState<WorkoutDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
@@ -359,7 +359,7 @@ export default function WorkoutDetailsScreen() {
 
         {/* Action Buttons */}
         <View style={styles.actionButtonsContainer}>
-          {hideAddToDay !== 'true' && (
+          {(hideAddToDay !== 'true' && isRecommended !== 'true') && (
             <TouchableOpacity style={styles.addToDayButton} onPress={handleAddToDay}>
               <Text style={styles.addToDayText}>Add to Day</Text>
             </TouchableOpacity>
