@@ -1,8 +1,10 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
+    Animated,
     Dimensions,
+    Easing,
     Platform,
     SafeAreaView,
     ScrollView,
@@ -25,6 +27,29 @@ export default function WorkoutCompleteScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
+  // Animation values
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Heartbeat pulsing animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 800,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+      ])
+    ).start();
+  }, [pulseAnim]);
+
   // Get passed stats or use defaults
   const calories = params.calories || '340';
   const sets = params.sets || '18';
@@ -40,11 +65,9 @@ export default function WorkoutCompleteScreen() {
             style={styles.iconButton}
             onPress={() => router.replace('/(tabs)/')}
           >
-            <MaterialIcons name="close" size={24} color={TEXT_LIGHT} />
+            {/* Empty TouchableOpacity for spacing/alignment if needed, or remove completely */}
           </TouchableOpacity>
-          <View style={styles.iconButton}>
-            <MaterialIcons name="battery-charging-full" size={24} color={PRIMARY} />
-          </View>
+          {/* Removed battery icon */}
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -54,7 +77,7 @@ export default function WorkoutCompleteScreen() {
               <Text style={styles.badgeText}>SUCCESS</Text>
             </View>
             <Text style={styles.heroTitle}>WORKOUT COMPLETE!</Text>
-            <Text style={styles.heroSubtitle}>Congratulations</Text>
+            <Text style={styles.heroSubtitle}>MƏŞQ TAMAMLANDI!</Text>
           </View>
 
           {/* Central Graphic */}
@@ -62,9 +85,9 @@ export default function WorkoutCompleteScreen() {
             <View style={styles.graphicBox}>
               {/* Radial Gradient Background using ImageBackground or multiple Views since React Native doesn't support complex CSS radial gradients natively easily */}
               <View style={styles.radialBackground}>
-                 <View style={styles.radialCircle1} />
-                 <View style={styles.radialCircle2} />
-                 <View style={styles.radialCircle3} />
+                 <Animated.View style={[styles.radialCircle1, { transform: [{ scale: pulseAnim }], opacity: 0.03 }]} />
+                 <Animated.View style={[styles.radialCircle2, { transform: [{ scale: pulseAnim }], opacity: 0.06 }]} />
+                 <Animated.View style={[styles.radialCircle3, { transform: [{ scale: pulseAnim }] }]} />
               </View>
               
               <View style={styles.trophyWrapper}>
@@ -152,9 +175,10 @@ const styles = StyleSheet.create({
   },
   heroContainer: {
     alignItems: 'center',
-    paddingTop: 32,
+    paddingTop: 16, // Reduced top padding to move it higher up
     paddingBottom: 16,
     paddingHorizontal: 16,
+    marginTop: -20, // Negative margin to pull it closer to header
   },
   badgeContainer: {
     backgroundColor: 'rgba(204, 255, 0, 0.1)',
@@ -205,36 +229,39 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+    top: -45 // Adjust this value to align perfectly behind the trophy
   },
   radialCircle1: {
     position: 'absolute',
-    width: 280,
+    width: 900,
     height: 280,
     borderRadius: 140,
     backgroundColor: 'rgba(204, 255, 0, 0.03)', // Very faint outer ring
   },
   radialCircle2: {
     position: 'absolute',
-    width: 200,
+    width: 2000,
     height: 200,
-    borderRadius: 100,
+    borderRadius: 1000,
     backgroundColor: 'rgba(204, 255, 0, 0.06)', // Middle ring
   },
   radialCircle3: {
     position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(204, 255, 0, 0.1)', // Inner glow
+    width: 140, // Increased size slightly to frame the trophy better
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: PRIMARY, // Changed to Dashboard button color (PRIMARY)
+    opacity: 0.2, // Keep some transparency so it doesn't hide the trophy
     shadowColor: PRIMARY,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 40,
-    elevation: 10,
+    elevation: 0,
   },
   trophyWrapper: {
     zIndex: 10,
     alignItems: 'center',
+    justifyContent: 'center', // Center vertically
   },
   trophyIcon: {
     marginBottom: 16,
