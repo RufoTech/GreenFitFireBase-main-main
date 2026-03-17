@@ -1,6 +1,7 @@
+import firestore from '@react-native-firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Dimensions, Image, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Dimensions, Image, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
 
@@ -80,6 +81,61 @@ export default function ExerciseDetailScreen() {
   } catch (error) {
     console.error('Error parsing exercise:', error);
   }
+
+  const [muscleImage, setMuscleImage] = useState<string | null>(null);
+  const [muscleNames, setMuscleNames] = useState<string[]>([]);
+  
+  useEffect(() => {
+    const fetchMuscleData = async () => {
+      if (!exercise) return;
+
+      try {
+        let docData = null;
+
+        // 1. Try to fetch by exerciseId if available
+        if (exercise.exerciseId) {
+          const doc = await firestore().collection('workouts').doc(exercise.exerciseId).get();
+          if (doc.exists) {
+            docData = doc.data();
+          }
+        }
+
+        // 2. If not found, try to query by name
+        if (!docData && exercise.name) {
+          const query = await firestore()
+            .collection('workouts')
+            .where('name', '==', exercise.name)
+            .limit(1)
+            .get();
+          
+          if (!query.empty) {
+            docData = query.docs[0].data();
+          }
+        }
+
+        if (docData && docData.muscleGroups && Array.isArray(docData.muscleGroups) && docData.muscleGroups.length > 0) {
+           // Get the first muscle group image
+           const firstGroup = docData.muscleGroups[0];
+           if (firstGroup.imageUrl) {
+             setMuscleImage(firstGroup.imageUrl);
+           }
+           
+           // Collect all muscle names
+           const names = docData.muscleGroups.map((g: any) => g.name).filter((n: string) => n);
+           setMuscleNames(names);
+        } else {
+             // Fallback to passed params if available
+             if (exercise.targetMuscleImage) setMuscleImage(exercise.targetMuscleImage);
+             if (exercise.muscleNames) setMuscleNames(exercise.muscleNames);
+        }
+
+      } catch (err) {
+        console.error("Error fetching muscle data:", err);
+      }
+    };
+
+    fetchMuscleData();
+  }, [exerciseParam]); // Re-run if params change
   
   // Robust Video ID Extraction
   let videoId = null;
@@ -215,9 +271,9 @@ export default function ExerciseDetailScreen() {
             
             <View style={styles.musclesCard}>
                 <View style={styles.muscleImageContainer}>
-                    {exercise?.targetMuscleImage ? (
+                    {muscleImage ? (
                         <Image 
-                            source={{ uri: exercise.targetMuscleImage }}
+                            source={{ uri: muscleImage }}
                             style={styles.muscleImage}
                             resizeMode="contain"
                         />
@@ -230,12 +286,13 @@ export default function ExerciseDetailScreen() {
                 </View>
                 
                 <View style={styles.muscleGrid}>
-                    {(exercise?.muscleNames || []).map((m: string, i: number) => (
+                    {muscleNames.length > 0 ? (
+                        muscleNames.map((m: string, i: number) => (
                         <View key={i} style={[styles.muscleItem, { borderColor: "#334155" }]}>
                             <Text style={[styles.muscleItemLabel, { color: PRIMARY }]}>{m}</Text>
                         </View>
-                    ))}
-                    {(exercise?.muscleNames || []).length === 0 && (
+                    ))
+                    ) : (
                         <Text style={{ color: '#94a3b8', fontStyle: 'italic' }}>No target muscles specified</Text>
                     )}
                 </View>
