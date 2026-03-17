@@ -293,7 +293,27 @@ export default function LiveWorkoutScreen() {
     }
   };
 
+  const [lastClickTime, setLastClickTime] = useState(0);
+  const [isNextDisabled, setIsNextDisabled] = useState(false);
+  const [isPrevDisabled, setIsPrevDisabled] = useState(false);
+
   const handleNext = () => {
+    // Prevent clicking if currently disabled
+    if (isNextDisabled) return;
+
+    // Debounce: Prevent rapid clicks
+    const now = Date.now();
+    if (now - lastClickTime < 1500) {
+      return;
+    }
+    setLastClickTime(now);
+
+    // Temporarily disable the button
+    setIsNextDisabled(true);
+    setTimeout(() => {
+      setIsNextDisabled(false);
+    }, 1500);
+
     // Check if there is a rest timer for the current block/set
     const currentItem = flatWorkoutQueue[currentIndex];
     const currentSet = rawExercises[currentItem.blockIndex]?.sets[currentItem.setIndex];
@@ -378,7 +398,16 @@ export default function LiveWorkoutScreen() {
   };
 
   const handlePrev = () => {
+    // Prevent clicking if currently disabled
+    if (isPrevDisabled) return;
+
     if (currentIndex > 0) {
+      // Temporarily disable the button
+      setIsPrevDisabled(true);
+      setTimeout(() => {
+        setIsPrevDisabled(false);
+      }, 1500);
+
       setCurrentIndex(prev => prev - 1);
     }
   };
@@ -755,7 +784,11 @@ export default function LiveWorkoutScreen() {
       <View style={styles.footer}>
         <View style={styles.footerButtons}>
             {currentIndex > 0 ? (
-                <TouchableOpacity style={styles.prevButton} onPress={handlePrev}>
+                <TouchableOpacity 
+                  style={[styles.prevButton, isPrevDisabled && { opacity: 0.5 }]} 
+                  onPress={handlePrev}
+                  disabled={isPrevDisabled}
+                >
                     <MaterialIcons name="arrow-back" size={20} color="#f1f5f9" />
                     <Text style={styles.prevButtonText}>Previous</Text>
                 </TouchableOpacity>
@@ -763,7 +796,11 @@ export default function LiveWorkoutScreen() {
                 <View style={{ flex: 1 }} /> // Spacer to keep Next button on right
             )}
             
-            <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+            <TouchableOpacity 
+              style={[styles.nextButton, isNextDisabled && { backgroundColor: '#64748b', opacity: 0.8 }]} 
+              onPress={handleNext}
+              disabled={isNextDisabled}
+            >
                 <Text style={styles.nextButtonText}>
                     {currentIndex === flatWorkoutQueue.length - 1 ? "Finish" : "Next Set"}
                 </Text>

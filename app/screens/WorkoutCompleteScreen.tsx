@@ -95,7 +95,7 @@ export default function WorkoutCompleteScreen() {
             onPress={() => router.replace('/(tabs)/')}
           >
             <MaterialIcons name="dashboard" size={24} color="#000" />
-            <Text style={styles.primaryButtonText}>Dashboard / İdarə paneli</Text>
+            <Text style={styles.primaryButtonText}>Dashboard</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -103,7 +103,7 @@ export default function WorkoutCompleteScreen() {
             // Share logic can be added here
           >
             <MaterialIcons name="share" size={24} color={TEXT_LIGHT} />
-            <Text style={styles.secondaryButtonText}>Share Progress / Paylaş</Text>
+            <Text style={styles.secondaryButtonText}>Share Progress</Text>
           </TouchableOpacity>
         </View>
         
