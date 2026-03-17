@@ -1,10 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import {
     Dimensions,
-    ImageBackground,
     Platform,
     SafeAreaView,
     ScrollView,
@@ -28,115 +26,89 @@ export default function WorkoutCompleteScreen() {
   const params = useLocalSearchParams();
 
   // Get passed stats or use defaults
-  const totalTime = params.totalTime || '45m';
-  const volume = params.volume || '1200kg';
-  const calories = params.calories || '350kcal';
+  const calories = params.calories || '340';
+  const sets = params.sets || '18';
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={BG_DARK} />
       
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Top Navigation */}
+      <View style={styles.contentWrapper}>
+        {/* Top App Bar */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>FitFlow</Text>
-          <TouchableOpacity style={styles.iconButton}>
-            <MaterialIcons name="share" size={24} color={TEXT_MUTED} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Hero Section */}
-        <View style={styles.heroContainer}>
-          <ImageBackground
-            source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBWrXKryuijUaJvtoyKkuy4J6_8yTvBiIyJPAZvSmeBW7eGq50tXXgAJA45NGjMC_4gDEZ1QdIbGPdAW4MLx_q7Iz9YY7yZcg9Ch15OJXAyqxQUsqpxduQz-l3lnUFpXW1l-J7yxmhI-UqSiseUB-IRxpeg9CM---TdTHlIgZedx4sZstuiPN5_u-B4wJMcb6YpaQebryex2PcqOH1kBTNp23BiNcA0pr6t4EXJtnG8_aKL4gPCTz_tZ3MJ-4765QWKomvlHU7a55I' }}
-            style={styles.heroImage}
-            imageStyle={{ borderRadius: 16 }}
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPress={() => router.replace('/(tabs)/')}
           >
-            <LinearGradient
-              colors={['transparent', 'rgba(31, 35, 15, 0.9)']}
-              style={StyleSheet.absoluteFillObject}
-            />
-            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(204, 255, 0, 0.1)' }]} />
-            
-            <View style={styles.heroContent}>
-              <View style={styles.badgeContainer}>
-                <MaterialIcons name="workspace-premium" size={16} color="#000" />
-                <Text style={styles.badgeText}>EXCELLENT RESULT</Text>
-              </View>
-              <Text style={styles.heroTitle}>Workout Complete!</Text>
+            <MaterialIcons name="close" size={24} color={TEXT_LIGHT} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>GreenFit</Text>
+          <View style={styles.iconButton}>
+            <MaterialIcons name="battery-charging-full" size={24} color={PRIMARY} />
+          </View>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* Hero Section / Celebration Header */}
+          <View style={styles.heroContainer}>
+            <View style={styles.badgeContainer}>
+              <Text style={styles.badgeText}>SUCCESS</Text>
             </View>
-          </ImageBackground>
-        </View>
+            <Text style={styles.heroTitle}>WORKOUT COMPLETE!</Text>
+            <Text style={styles.heroSubtitle}>MƏŞQ TAMAMLANDI!</Text>
+          </View>
 
-        {/* Stats Grid */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <MaterialIcons name="schedule" size={24} color={PRIMARY} style={styles.statIcon} />
-            <Text style={styles.statLabel}>Total Time</Text>
-            <Text style={styles.statValue}>{totalTime}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <MaterialIcons name="fitness-center" size={24} color={PRIMARY} style={styles.statIcon} />
-            <Text style={styles.statLabel}>Volume</Text>
-            <Text style={styles.statValue}>{volume}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <MaterialIcons name="local-fire-department" size={24} color={PRIMARY} style={styles.statIcon} />
-            <Text style={styles.statLabel}>Calories</Text>
-            <Text style={styles.statValue}>{calories}</Text>
-          </View>
-        </View>
-
-        {/* Progress Mini Card */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressCard}>
-            <View style={styles.progressLeft}>
-              <View style={styles.progressIconContainer}>
-                <MaterialIcons name="trending-up" size={24} color="#000" />
+          {/* Central Graphic */}
+          <View style={styles.graphicContainer}>
+            <View style={styles.graphicBox}>
+              {/* Radial Gradient Background using ImageBackground or multiple Views since React Native doesn't support complex CSS radial gradients natively easily */}
+              <View style={styles.radialBackground}>
+                 <View style={styles.radialCircle1} />
+                 <View style={styles.radialCircle2} />
+                 <View style={styles.radialCircle3} />
               </View>
-              <View>
-                <Text style={styles.progressTitle}>Your Progress</Text>
-                <Text style={styles.progressSubtitle}>You're 15% closer to your goal today</Text>
+              
+              <View style={styles.trophyWrapper}>
+                <MaterialIcons name="emoji-events" size={120} color={PRIMARY} style={styles.trophyIcon} />
+                <View style={styles.starsContainer}>
+                  <MaterialIcons name="star" size={24} color="rgba(204, 255, 0, 0.6)" />
+                  <MaterialIcons name="star" size={24} color={PRIMARY} />
+                  <MaterialIcons name="star" size={24} color="rgba(204, 255, 0, 0.6)" />
+                </View>
               </View>
             </View>
-            <MaterialIcons name="chevron-right" size={24} color={TEXT_MUTED} />
           </View>
-        </View>
 
-        {/* Actions */}
+          {/* Statistics Grid */}
+          {/* REMOVED: Kcal and Sets cards as requested */}
+          {/* If you want to display nothing here, we can remove the View entirely or leave it empty. 
+              Based on "sil" (delete), I will remove the content but keep the container structure 
+              if you plan to add something else, or remove the container if it's meant to be empty.
+              Assuming complete removal of these specific cards. */}
+          {/* <View style={styles.statsContainer}> ... </View> */ }
+        </ScrollView>
+
+        {/* Action Buttons (Fixed at bottom) */}
         <View style={styles.actionsContainer}>
           <TouchableOpacity 
             style={styles.primaryButton}
-            onPress={() => router.replace('/(tabs)/')} // Replace to clear stack and go home
+            onPress={() => router.replace('/(tabs)/')}
           >
-            <MaterialIcons name="home" size={24} color="#000" />
-            <Text style={styles.primaryButtonText}>Back to Home</Text>
+            <MaterialIcons name="dashboard" size={24} color="#000" />
+            <Text style={styles.primaryButtonText}>Dashboard / İdarə paneli</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
             style={styles.secondaryButton}
-            onPress={() => router.replace('/screens/WorkoutHistoryScreen')} // Assuming this exists, or adjust route
+            // Share logic can be added here
           >
-            <MaterialIcons name="history" size={24} color={TEXT_LIGHT} />
-            <Text style={styles.secondaryButtonText}>Workout History</Text>
+            <MaterialIcons name="share" size={24} color={TEXT_LIGHT} />
+            <Text style={styles.secondaryButtonText}>Share Progress / Paylaş</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Celebration Footer */}
-        <View style={styles.footerContainer}>
-          <Text style={styles.footerText}>Every move is a step forward. Keep going!</Text>
-        </View>
-
-      </ScrollView>
-      
-      {/* Decorative Element */}
-      <View style={styles.decorativeLine}>
-         <LinearGradient
-            colors={['transparent', PRIMARY, 'transparent']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={StyleSheet.absoluteFillObject}
-         />
+        
+        {/* Subtle Background Glow at bottom */}
+        <View style={styles.bottomGlow} pointerEvents="none" />
       </View>
     </SafeAreaView>
   );
@@ -148,67 +120,132 @@ const styles = StyleSheet.create({
     backgroundColor: BG_DARK,
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
+  contentWrapper: {
+    flex: 1,
+    maxWidth: 448, // max-w-md equivalent
+    alignSelf: 'center',
+    width: '100%',
+  },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 40,
+    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    paddingBottom: 8,
   },
   headerTitle: {
     color: TEXT_LIGHT,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
   heroContainer: {
-    padding: 16,
-  },
-  heroImage: {
-    width: '100%',
-    minHeight: 240,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-    borderRadius: 16,
-  },
-  heroContent: {
-    padding: 24,
-    zIndex: 10,
+    alignItems: 'center',
+    paddingTop: 32,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
   },
   badgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: PRIMARY,
-    paddingHorizontal: 12,
+    backgroundColor: 'rgba(204, 255, 0, 0.1)',
+    paddingHorizontal: 16,
     paddingVertical: 4,
     borderRadius: 999,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.2)',
+    marginBottom: 16,
   },
   badgeText: {
-    color: '#000',
-    fontSize: 10,
+    color: PRIMARY,
+    fontSize: 12,
     fontWeight: 'bold',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
   heroTitle: {
-    color: '#fff',
-    fontSize: 28,
+    color: TEXT_LIGHT,
+    fontSize: 32,
     fontWeight: '900',
-    letterSpacing: -0.5,
+    letterSpacing: -1,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  heroSubtitle: {
+    color: PRIMARY,
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  graphicContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+    width: '100%',
+    flex: 1,
+    minHeight: 300,
+  },
+  graphicBox: {
+    width: '100%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    overflow: 'hidden', // Ensure circles don't spill out
+  },
+  radialBackground: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radialCircle1: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: 'rgba(204, 255, 0, 0.03)', // Very faint outer ring
+  },
+  radialCircle2: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(204, 255, 0, 0.06)', // Middle ring
+  },
+  radialCircle3: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(204, 255, 0, 0.1)', // Inner glow
+    shadowColor: PRIMARY,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 40,
+    elevation: 10,
+  },
+  trophyWrapper: {
+    zIndex: 10,
+    alignItems: 'center',
+  },
+  trophyIcon: {
+    marginBottom: 16,
+    textShadowColor: 'rgba(204, 255, 0, 0.4)', // Yüngül kubok parıltısı
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    gap: 8,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -218,65 +255,33 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: BG_DARK, // Match dark theme
+    backgroundColor: 'rgba(30, 41, 59, 0.5)', // bg-slate-800/50
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(51, 65, 85, 0.5)', // border-slate-700/50
+    gap: 4,
   },
-  statIcon: {
-    marginBottom: 4,
+  statCardBorderPrimary: {
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(204, 255, 0, 0.5)',
   },
   statLabel: {
     color: TEXT_MUTED,
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 2,
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   statValue: {
-    color: '#fff',
-    fontSize: 18,
+    color: TEXT_LIGHT,
+    fontSize: 24,
     fontWeight: 'bold',
-  },
-  progressContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  progressCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(204, 255, 0, 0.05)',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.2)',
-  },
-  progressLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  progressIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: PRIMARY,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  progressSubtitle: {
-    color: TEXT_MUTED,
-    fontSize: 12,
   },
   actionsContainer: {
     paddingHorizontal: 16,
+    paddingBottom: 48,
+    paddingTop: 16,
     gap: 12,
   },
   primaryButton: {
@@ -284,14 +289,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: PRIMARY,
-    paddingVertical: 16,
+    height: 56,
     borderRadius: 12,
-    gap: 8,
+    gap: 12,
     shadowColor: PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 5,
   },
   primaryButtonText: {
     color: '#000',
@@ -303,28 +308,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: CARD_BG,
-    paddingVertical: 16,
+    height: 56,
     borderRadius: 12,
-    gap: 8,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(51, 65, 85, 1)',
   },
   secondaryButtonText: {
     color: TEXT_LIGHT,
     fontSize: 16,
     fontWeight: 'bold',
   },
-  footerContainer: {
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  footerText: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  decorativeLine: {
-    height: 4,
-    width: '100%',
-    opacity: 0.5,
+  bottomGlow: {
+    position: 'absolute',
+    bottom: '-10%',
+    left: '50%',
+    transform: [{ translateX: -width * 0.6 }], // Approximation of -translate-x-1/2 for a 120% width
+    width: width * 1.2,
+    height: '30%',
+    backgroundColor: 'rgba(204, 255, 0, 0.05)',
+    borderRadius: width,
+    // Add shadow to simulate blur
+    shadowColor: PRIMARY,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 80,
+    elevation: 20,
   }
 });

@@ -73,6 +73,8 @@ export default function LiveWorkoutScreen() {
   const [loading, setLoading] = useState(true);
   const [workoutName, setWorkoutName] = useState("");
   const [workoutDuration, setWorkoutDuration] = useState("45"); // Default duration
+  const [workoutEquipment, setWorkoutEquipment] = useState("None");
+  const [workoutTarget, setWorkoutTarget] = useState("General");
   const [rawExercises, setRawExercises] = useState<ExerciseBlock[]>([]);
   
   // We need to flatten the nested structure into a linear list of "steps" for the live workout
@@ -130,29 +132,98 @@ export default function LiveWorkoutScreen() {
           return;
       }
 
-      console.log("Getting ID token...");
-      const token = await user.getIdToken();
+      // 1. First, check local state (WorkoutDetailsScreen logic) to avoid 404s
+      // If the ID is a custom workout or a standard workout, fetch from Firestore directly
+      // This is more robust than relying solely on the Go API which might not have the custom programs yet
+      let rawData: any = null;
+      let isFoundLocally = false;
       
-      const url = `${API_URL}/api/workout-plan?workoutId=${workoutId}`;
-      console.log(`Fetching workout plan from Go API: ${url}`);
-
-      const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-          }
-      });
-
-      if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+      try {
+        // Try standard workout_programs first
+        const workoutDoc = await firestore().collection('workout_programs').doc(String(workoutId)).get();
+        if (workoutDoc.exists) {
+            rawData = workoutDoc.data();
+            rawData.id = workoutDoc.id;
+            isFoundLocally = true;
+        } else {
+            // Try customUserWorkouts next
+            const customDoc = await firestore().collection('customUserWorkouts').doc(String(workoutId)).get();
+            if (customDoc.exists) {
+                rawData = customDoc.data();
+                rawData.id = customDoc.id;
+                isFoundLocally = true;
+            }
+        }
+      } catch (err) {
+        console.log("Error checking local firestore:", err);
       }
 
-      const data = await response.json();
-      console.log("Workout Plan Received");
+      let data: any;
+
+      if (isFoundLocally && rawData) {
+          console.log("Workout Plan fetched from Firestore directly");
+          data = rawData;
+      } else {
+          // Fallback to Go API if not found in Firestore directly (for backwards compatibility)
+          console.log("Getting ID token...");
+          const token = await user.getIdToken();
+          
+          const url = `${API_URL}/api/workout-plan?workoutId=${workoutId}`;
+          console.log(`Fetching workout plan from Go API: ${url}`);
+
+          const response = await fetch(url, {
+              method: 'GET',
+              headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+              }
+          });
+
+          if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          data = await response.json();
+          console.log("Workout Plan Received from API");
+
+          // The Go API might only return { name, exercises } for nested plan generation.
+          // Let's try to enrich it from Firestore if fields are missing.
+          try {
+              let enrichedDoc = await firestore().collection('workout_programs').doc(String(workoutId)).get();
+              if (!enrichedDoc.exists) {
+                  enrichedDoc = await firestore().collection('customUserWorkouts').doc(String(workoutId)).get();
+              }
+              
+              if (enrichedDoc.exists) {
+                  const enrichedData = enrichedDoc.data();
+                  if (enrichedData) {
+                      data.duration = data.duration || enrichedData.duration;
+                      data.equipment = data.equipment || enrichedData.equipment;
+                      data.targetMuscles = data.targetMuscles || enrichedData.targetMuscles;
+                      data.name = data.name || enrichedData.name || enrichedData.title;
+                  }
+              }
+          } catch (enrichErr) {
+              console.log("Failed to enrich data from Firestore:", enrichErr);
+          }
+      }
+
+      console.log("Fetched Workout Data:", JSON.stringify({
+          id: data.id,
+          name: data.name || data.title,
+          duration: data.duration,
+          equipment: data.equipment,
+          targetMuscles: data.targetMuscles
+      }, null, 2));
+
+      setWorkoutName(data.name || data.title || "Workout");
+      setWorkoutDuration(data.duration?.toString() || "45");
       
-      setWorkoutName(data.name || "Workout");
-      setWorkoutDuration(data.duration || "45");
+      const equip = Array.isArray(data.equipment) ? data.equipment.join(', ') : (data.equipment || "None");
+      setWorkoutEquipment(equip);
+      
+      const target = Array.isArray(data.targetMuscles) ? data.targetMuscles.join(', ') : (data.targetMuscles || "General");
+      setWorkoutTarget(target);
 
       // Flatten the structure
       const exercises: ExerciseBlock[] = data.exercises || [];
@@ -284,19 +355,23 @@ export default function LiveWorkoutScreen() {
     if (currentIndex < flatWorkoutQueue.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
+      // Calculate total sets by summing up all movements in the rawExercises
+      let totalSetsCount = 0;
+      rawExercises.forEach(block => {
+        block.sets.forEach(set => {
+          totalSetsCount += set.movements.length;
+        });
+      });
+
       // Calculate basic stats to pass
       const duration = workoutDuration || "45";
-      // Basic volume mock calculation if not tracked per set
-      const totalVolume = "1200"; 
-      // Basic calorie mock calculation based on duration
-      const cals = parseInt(duration) * 8; 
+      const cals = parseInt(duration) * 8; // Basic calculation: 8 kcal per minute
 
       router.replace({
         pathname: '/screens/WorkoutCompleteScreen',
         params: {
-          totalTime: `${duration}m`,
-          volume: `${totalVolume}kg`,
-          calories: `${cals}kcal`
+          calories: cals.toString(),
+          sets: totalSetsCount.toString()
         }
       });
     }
