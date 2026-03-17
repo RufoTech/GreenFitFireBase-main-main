@@ -90,7 +90,7 @@ export default function CreateProgramScreen() {
                   
                   if (dayData.isRest) {
                     weekWorkouts.push({
-                      id: Date.now() + Math.random(),
+                      id: `rest_${weekKey}_${dayKey}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                       type: 'rest',
                       title: 'Rest Day',
                       subtitle: '',
@@ -101,7 +101,8 @@ export default function CreateProgramScreen() {
                   } else if (dayData.programs && dayData.programs.length > 0) {
                     const program = dayData.programs[0]; // Take the first program
                     weekWorkouts.push({
-                      id: program.id || (Date.now() + Math.random()),
+                      id: `${program.id || 'workout'}_${weekKey}_${dayKey}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                      originalId: program.id,
                       type: 'workout',
                       title: program.name,
                       subtitle: `${program.exercises?.length || 0} exercises • ${program.duration || 0} Min`,
@@ -160,7 +161,8 @@ export default function CreateProgramScreen() {
           const nextDay = currentWeekWorkouts.length + 1;
           
           const newWorkout = { 
-            id: data.id || (Date.now() + Math.random()), 
+            id: `${data.id || 'workout'}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`, 
+            originalId: data.id,
             type: 'workout', 
             title: data.title, 
             subtitle: data.subtitle, 
@@ -169,11 +171,9 @@ export default function CreateProgramScreen() {
             extraCount: data.extraCount || 0 
           };
 
-          currentWeekWorkouts.push(newWorkout);
-
           return {
             ...prev,
-            [selectedWeek]: currentWeekWorkouts
+            [selectedWeek]: [...currentWeekWorkouts, newWorkout]
           };
         });
       }
@@ -305,7 +305,7 @@ export default function CreateProgramScreen() {
 
     const nextDay = currentWorkouts.length + 1;
     const newRestDay = { 
-      id: Date.now(), 
+      id: `rest_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`, 
       type: 'rest', 
       title: 'Rest Day', 
       subtitle: '', 
@@ -320,7 +320,7 @@ export default function CreateProgramScreen() {
     });
   };
 
-  const removeWorkout = (id: number) => {
+  const removeWorkout = (id: string | number) => {
     const updatedWeekWorkouts = currentWorkouts.filter((w: any) => w.id !== id).map((w: any, index: number) => ({
       ...w,
       day: index + 1

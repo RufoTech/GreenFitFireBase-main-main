@@ -285,8 +285,7 @@ export default function WorkoutDetailsScreen() {
       'add',
       'program_workout'
     );
-    // @ts-ignore
-    router.navigate('/screens/CreateProgramScreen');
+    router.back();
   };
 
   if (loading) {

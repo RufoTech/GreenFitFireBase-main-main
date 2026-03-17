@@ -48,6 +48,16 @@ export default function AddWorkoutScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Check if we have a pending selection from a child screen (WorkoutDetailsScreen)
+      const { data, action, targetId } = SelectionStore.getData();
+      if (data && action === 'add' && targetId === 'program_workout') {
+         // If we are in selection mode, propagate this back to CreateProgramScreen
+         if (params.selectionMode === 'true') {
+             router.back();
+             return;
+         }
+      }
+
       setLoading(true);
       // Fetch system workouts
       const unsubscribeSystem = firestore()
