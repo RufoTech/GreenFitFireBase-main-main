@@ -1,23 +1,22 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    ImageBackground,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  ImageBackground,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
@@ -68,7 +67,7 @@ interface FlattenedExerciseItem {
 
 export default function LiveWorkoutScreen() {
   const router = useRouter();
-  const { workoutId, programId, week, day } = useLocalSearchParams();
+  const { workoutId } = useLocalSearchParams();
   const [isExpanded, setIsExpanded] = useState(true);
   
   const [loading, setLoading] = useState(true);
@@ -101,7 +100,7 @@ export default function LiveWorkoutScreen() {
     const cleanUrl = url.replace(/[\s"`']/g, "");
     
     const patterns = [
-        /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/,
+        /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/,
         /^([a-zA-Z0-9_-]{11})$/ 
     ];
 
@@ -227,9 +226,10 @@ export default function LiveWorkoutScreen() {
       setWorkoutTarget(target);
 
       // Flatten the structure
-      const exercises: ExerciseBlock[] = (data.exercises || []).sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+      const exercises: ExerciseBlock[] = data.exercises || [];
       setRawExercises(exercises);
-      
+      const queue: FlattenedExerciseItem[] = [];
+
       // Calculate total sets based on the label of the LAST set in the LAST block
       let totalSetsFromLabel = 0;
       if (exercises.length > 0) {
@@ -250,105 +250,34 @@ export default function LiveWorkoutScreen() {
           }
       }
 
-      // 6) Flatten queue oluştur: her movement için bir girdi (set label, indices, image mapping vs.)
-      const queue: FlattenedExerciseItem[] = [];
-
-      // !!! IMPORTANT FIX: We need to enrich movements with data from the 'workouts' collection
-      // because the 'workout_programs' document only contains minimal info (name, reps).
-      // We will fetch all unique exercise IDs first, then batch fetch their full details.
-      
-      const allMovements: any[] = [];
-      exercises.forEach(block => {
-        block.sets.forEach(set => {
-            set.movements.forEach((m: any) => {
-                allMovements.push(m);
-            });
-        });
-      });
-
-      // Extract unique names or IDs to fetch full details
-      // It seems the movements in 'workout_programs' might NOT have the full data (like videoUrl, muscleGroups).
-      // They might just have { name: "Bench Press", reps: "10" }.
-      // So we need to query the 'workouts' collection for each unique exercise name.
-      
-      const uniqueNames = [...new Set(allMovements.map(m => m.name || m.title))].filter(Boolean);
-      const workoutDetailsMap: Record<string, any> = {};
-
-      if (uniqueNames.length > 0) {
-          try {
-              // Batch fetch is hard with 'where name in [...]' if list is long (>10).
-              // For simplicity, let's fetch them one by one or in chunks. 
-              // Or better: fetch all from 'workouts' where name is in the list.
-              // Firestore 'in' query limit is 10.
-              
-              const chunks = [];
-              for (let i = 0; i < uniqueNames.length; i += 10) {
-                  chunks.push(uniqueNames.slice(i, i + 10));
-              }
-
-              for (const chunk of chunks) {
-                  const snapshot = await firestore()
-                      .collection('workouts')
-                      .where('name', 'in', chunk)
-                      .get();
-                  
-                  snapshot.forEach(doc => {
-                      workoutDetailsMap[doc.data().name] = doc.data();
-                  });
-              }
-              console.log("Fetched detailed info for exercises:", Object.keys(workoutDetailsMap));
-          } catch (e) {
-              console.error("Error fetching exercise details:", e);
-          }
-      }
-
       exercises.forEach((block, bIdx) => {
-        (block.sets || []).forEach((set, sIdx) => {
-            (set.movements || []).forEach((movement: any, mIdx) => {
-                
-                // Merge with detailed info from 'workouts' collection
-                const details = workoutDetailsMap[movement.name || movement.title] || {};
-                
-                // Combine: Priority to movement specific overrides (like reps), but fallback to details for static info (video, image)
-                const mergedMovement = {
-                    ...details,      // Base details (videoUrl, muscleGroups, mainImage)
-                    ...movement,     // Overrides from program (reps, setsCount)
-                    // Ensure critical fields exist
-                    videoUrl: details.videoUrl || movement.videoUrl || movement.videoLink,
-                    muscleGroups: details.muscleGroups || movement.muscleGroups,
-                    image: details.mainImage || movement.imageUrl || movement.image // Prefer mainImage from workouts collection
-                };
+        block.sets.forEach((set, sIdx) => {
+            // Extract current set number from label
+            let currentSetNum = 0;
+            const match = set.label.match(/\d+/);
+            if (match) {
+                currentSetNum = parseInt(match[0], 10);
+            } else {
+                // Fallback: use global counter logic if label doesn't have number?
+                // Or maybe just index + 1?
+                // Let's assume the label has the number as per user request.
+                // If not, we might need a counter.
+                // Let's use a simple counter as fallback for safety.
+                currentSetNum = sIdx + 1; 
+            }
 
-                // targetMuscle və video url üçün əvvəlki dəyişənləri bərpa edirik
-                const movementImage = mergedMovement.image || mergedMovement.mainImage || mergedMovement.imageUrl || null;
+            set.movements.forEach((movement: any, mIdx) => {
+                const movementImage = movement.imageUrl || movement.mainImage || movement.image;
+                const enrichedMovement = { ...movement, image: movementImage };
                 
-                const muscleGroup = Array.isArray(mergedMovement.muscleGroups) && mergedMovement.muscleGroups.length > 0 
-                  ? mergedMovement.muscleGroups[0] 
-                  : undefined;
-
-                console.log(`[DEBUG] Processing Movement: ${mergedMovement.name}`);
-                console.log(`[DEBUG] Final Video URL: ${mergedMovement.videoUrl}`);
-                console.log(`[DEBUG] Final MuscleGroups:`, JSON.stringify(mergedMovement.muscleGroups));
-                  
-                const enrichedMovement = {
-                    ...mergedMovement,
-                    image: movementImage,
-                    muscleGroupName: muscleGroup?.name,
-                    muscleGroupImage: muscleGroup?.imageUrl,
-                    videoUrl: mergedMovement.videoUrl || null
-                };
-                
-                // Restore based on data from Firestore
                 queue.push({
                     movement: enrichedMovement,
                     setLabel: set.label,
                     blockIndex: bIdx,
                     setIndex: sIdx,
                     movementIndex: mIdx,
-                    // If totalSetsFromLabel is 0, default to 1
-                    totalSets: totalSetsFromLabel || 1,
-                    // Simplify set number, if no label use sIdx + 1
-                    currentSetNumber: parseInt(set.label?.match(/\d+/)?.[0] || String(sIdx + 1), 10)
+                    totalSets: totalSetsFromLabel || 1, // Avoid 0
+                    currentSetNumber: currentSetNum || (sIdx + 1)
                 });
             });
         });
@@ -437,16 +366,7 @@ export default function LiveWorkoutScreen() {
              // Usually rest is between sets.
              // We'll just finish workout if no next item.
              Alert.alert("Workout Complete", "Great job! You've finished the workout.", [
-                { text: "Finish", onPress: () => router.replace({
-                    pathname: '/screens/WorkoutCompleteScreen',
-                    params: {
-                        calories: "0",
-                        sets: "0",
-                        programId: programId as string,
-                        week: week as string,
-                        day: day as string
-                    }
-                }) }
+                { text: "Finish", onPress: () => router.replace('/screens/WorkoutCompleteScreen') }
               ]);
         }
         return;
@@ -471,10 +391,7 @@ export default function LiveWorkoutScreen() {
         pathname: '/screens/WorkoutCompleteScreen',
         params: {
           calories: cals.toString(),
-          sets: totalSetsCount.toString(),
-          programId: programId as string,
-          week: week as string,
-          day: day as string
+          sets: totalSetsCount.toString()
         }
       });
     }
@@ -523,17 +440,15 @@ export default function LiveWorkoutScreen() {
   
   // Use muscleGroups from exercise data
   // User request: "targetMuscle img ve nameler "workouts" collectionunun "muscleGroups" arrayinin "imageUrl" fieldindan ve "name" fieldindan gelecek.image olarak ilk imageni gostereceksen digerlerine ehtiyac yoxdur"
-  let targetMuscleName = currentExercise.muscleGroupName || "General";
-  let targetMuscleImage = currentExercise.muscleGroupImage || null;
+  let targetMuscleName = "General";
+  let targetMuscleImage = null;
 
-  if (!targetMuscleName || targetMuscleName === "General") {
-      if (currentExercise.muscleGroups && currentExercise.muscleGroups.length > 0) {
-          targetMuscleName = currentExercise.muscleGroups[0].name;
-          targetMuscleImage = currentExercise.muscleGroups[0].imageUrl;
-      } else if (currentExercise.category) {
-          // Fallback to category if no muscle groups defined
-          targetMuscleName = currentExercise.category;
-      }
+  if (currentExercise.muscleGroups && currentExercise.muscleGroups.length > 0) {
+      targetMuscleName = currentExercise.muscleGroups[0].name;
+      targetMuscleImage = currentExercise.muscleGroups[0].imageUrl;
+  } else if (currentExercise.category) {
+      // Fallback to category if no muscle groups defined
+      targetMuscleName = currentExercise.category;
   }
   
   // Create Plyr HTML
@@ -544,7 +459,7 @@ export default function LiveWorkoutScreen() {
       <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
       <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
       <style>
-        body { margin: 0; padding: 0; background-color: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        body { margin: 0; padding: 0; background-color: #1e293b; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         .plyr { width: 100%; height: 100%; }
         .plyr__video-wrapper { height: 100%; }
       </style>

@@ -1,4 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 import {
@@ -49,6 +51,35 @@ export default function WorkoutCompleteScreen() {
       ])
     ).start();
   }, [pulseAnim]);
+
+  useEffect(() => {
+    const saveProgress = async () => {
+      const { programId, week, day } = params;
+      if (programId && week && day) {
+        const user = auth().currentUser;
+        if (user) {
+          try {
+            const docRef = firestore()
+              .collection('users')
+              .doc(user.uid)
+              .collection('program_progress')
+              .doc(programId as string);
+            
+            // Format: { "WEEK 1": { "1": true } }
+            await docRef.set({
+              [week as string]: {
+                [day as string]: true
+              }
+            }, { merge: true });
+            console.log("Progress saved successfully!");
+          } catch (e) {
+            console.error("Error saving progress:", e);
+          }
+        }
+      }
+    };
+    saveProgress();
+  }, [params]);
 
   // Get passed stats or use defaults
   const calories = params.calories || '340';
@@ -114,10 +145,21 @@ export default function WorkoutCompleteScreen() {
         <View style={styles.actionsContainer}>
           <TouchableOpacity 
             style={styles.primaryButton}
-            onPress={() => router.replace('/(tabs)/')}
+            onPress={() => {
+              if (params.programId) {
+                router.replace({ 
+                  pathname: '/screens/WeeklyProgramScreen', 
+                  params: { programId: params.programId } 
+                });
+              } else {
+                router.replace('/(tabs)/');
+              }
+            }}
           >
             <MaterialIcons name="dashboard" size={24} color="#000" />
-            <Text style={styles.primaryButtonText}>Dashboard</Text>
+            <Text style={styles.primaryButtonText}>
+              {params.programId ? "Back to Program" : "Dashboard"}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity 

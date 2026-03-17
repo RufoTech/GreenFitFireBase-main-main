@@ -1,22 +1,23 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  Modal,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    Modal,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
@@ -44,8 +45,35 @@ export default function WeeklyProgramScreen() {
   const [weekSchedule, setWeekSchedule] = useState<any[]>([]);
   const [availableWeeks, setAvailableWeeks] = useState<string[]>([]);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [completedWorkouts, setCompletedWorkouts] = useState<any>({});
   // Placeholder for dark mode toggle if needed later, currently defaulting to dark mode styles
   const isDarkMode = true;
+
+  const fetchProgress = async () => {
+    if (!programId) return;
+    const user = auth().currentUser;
+    if (!user) return;
+    try {
+      const docRef = await firestore()
+        .collection('users')
+        .doc(user.uid)
+        .collection('program_progress')
+        .doc(programId as string)
+        .get();
+      
+      if (docRef.exists) {
+        setCompletedWorkouts(docRef.data());
+      }
+    } catch (e) {
+      console.error("Error fetching progress:", e);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProgress();
+    }, [programId])
+  );
 
   useEffect(() => {
     fetchProgramWeeks();
@@ -208,7 +236,8 @@ export default function WeeklyProgramScreen() {
             /* Day List */
             <View style={styles.daysList}>
                 {weekSchedule.map((item) => {
-                    
+                    const isCompleted = completedWorkouts && completedWorkouts[activeWeek] ? completedWorkouts[activeWeek][item.day] === true : false;
+
                     if (item.type !== 'rest') {
                         // Check if image is missing or placeholder
                         const isNoImage = !item.image || item.image.includes('placeholder');
@@ -221,6 +250,12 @@ export default function WeeklyProgramScreen() {
                                             <Text style={styles.noImageLevelText}>DAY {item.day}</Text>
                                             <Text style={styles.noImageTitle}>{item.title}</Text>
                                         </View>
+                                        {isCompleted && (
+                                            <View style={styles.completedBadge}>
+                                                <MaterialIcons name="check-circle" size={14} color={BG_DARK} />
+                                                <Text style={styles.completedBadgeText}>Completed</Text>
+                                            </View>
+                                        )}
                                     </View>
 
                                     <View style={styles.noImageDetailsRow}>
@@ -246,7 +281,7 @@ export default function WeeklyProgramScreen() {
                                                 }
                                             })}
                                         >
-                                            <MaterialIcons name="play-arrow" size={24} color="#1f230f" />
+                                            <MaterialIcons name={isCompleted ? "replay" : "play-arrow"} size={24} color="#1f230f" />
                                         </TouchableOpacity>
                                     </View>
                                 </View>
@@ -259,6 +294,12 @@ export default function WeeklyProgramScreen() {
                                     <View style={styles.dayInfo}>
                                         {item.isCurrent && (
                                             <Text style={styles.currentDayLabel}>CURRENT DAY</Text>
+                                        )}
+                                        {isCompleted && (
+                                            <View style={styles.completedBadgeSmall}>
+                                                <MaterialIcons name="check-circle" size={12} color={PRIMARY} />
+                                                <Text style={styles.completedBadgeTextSmall}>Completed Workout</Text>
+                                            </View>
                                         )}
                                         <Text style={styles.dayTitle}>Day {item.day}: {item.title}</Text>
                                         <View style={styles.dayMeta}>
@@ -304,8 +345,8 @@ export default function WeeklyProgramScreen() {
                                         }
                                     })}
                                 >
-                                    <MaterialIcons name="play-circle-filled" size={24} color={BG_DARK} />
-                                    <Text style={styles.startWorkoutText}>START WORKOUT</Text>
+                                    <MaterialIcons name={isCompleted ? "replay" : "play-circle-filled"} size={24} color={BG_DARK} />
+                                    <Text style={styles.startWorkoutText}>{isCompleted ? "AGAIN WORKOUT" : "START WORKOUT"}</Text>
                                 </TouchableOpacity>
                             </View>
                         );
@@ -688,5 +729,39 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: PRIMARY,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  completedBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: BG_DARK,
+    textTransform: 'uppercase',
+  },
+  completedBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(204, 255, 0, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.3)',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginBottom: 4,
+  },
+  completedBadgeTextSmall: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: PRIMARY,
+    textTransform: 'uppercase',
   },
 });

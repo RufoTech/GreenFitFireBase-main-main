@@ -172,7 +172,12 @@ export default function WorkoutStartScreen() {
                 }
                 router.replace({
                     pathname: '/screens/LiveWorkoutScreen',
-                    params: { workoutId: workout.id }
+                    params: { 
+                        workoutId: workout.id,
+                        programId: params.programId,
+                        week: params.week,
+                        day: workout.day
+                    }
                 });
             }}
         >
