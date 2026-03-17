@@ -90,7 +90,8 @@ export default function CreateProgramScreen() {
                   
                   if (dayData.isRest) {
                     weekWorkouts.push({
-                      id: `rest_${weekKey}_${dayKey}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                      id: 'rest',
+                      uniqueId: `rest_${weekKey}_${dayKey}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                       type: 'rest',
                       title: 'Rest Day',
                       subtitle: '',
@@ -101,7 +102,8 @@ export default function CreateProgramScreen() {
                   } else if (dayData.programs && dayData.programs.length > 0) {
                     const program = dayData.programs[0]; // Take the first program
                     weekWorkouts.push({
-                      id: `${program.id || 'workout'}_${weekKey}_${dayKey}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                      id: program.id,
+                      uniqueId: `${program.id || 'workout'}_${weekKey}_${dayKey}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                       originalId: program.id,
                       type: 'workout',
                       title: program.name,
@@ -161,7 +163,8 @@ export default function CreateProgramScreen() {
           const nextDay = currentWeekWorkouts.length + 1;
           
           const newWorkout = { 
-            id: `${data.id || 'workout'}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`, 
+            id: data.id, // Using the real document ID here is critical for the next screen!
+            uniqueId: `${data.id || 'workout'}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`, 
             originalId: data.id,
             type: 'workout', 
             title: data.title, 
@@ -305,7 +308,8 @@ export default function CreateProgramScreen() {
 
     const nextDay = currentWorkouts.length + 1;
     const newRestDay = { 
-      id: `rest_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`, 
+      id: 'rest', 
+      uniqueId: `rest_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       type: 'rest', 
       title: 'Rest Day', 
       subtitle: '', 
@@ -320,8 +324,8 @@ export default function CreateProgramScreen() {
     });
   };
 
-  const removeWorkout = (id: string | number) => {
-    const updatedWeekWorkouts = currentWorkouts.filter((w: any) => w.id !== id).map((w: any, index: number) => ({
+  const removeWorkout = (uniqueId: string | number) => {
+    const updatedWeekWorkouts = currentWorkouts.filter((w: any) => w.uniqueId !== uniqueId).map((w: any, index: number) => ({
       ...w,
       day: index + 1
     }));
@@ -435,7 +439,7 @@ export default function CreateProgramScreen() {
             ) : (
               <>
                 {currentWorkouts.map((item: any, index: number) => (
-                  <View key={item.id}>
+                  <View key={item.uniqueId || item.id}>
                     {item.type === 'workout' ? (
                       <View style={[styles.workoutCard, { backgroundColor: theme.cardBg, borderColor: theme.cardBorder }]}>
                         <View style={styles.workoutHeader}>
@@ -446,7 +450,7 @@ export default function CreateProgramScreen() {
                         <Text style={[styles.workoutTitle, { color: theme.text }]}>{item.title}</Text>
                       </View>
                       <View style={{ flexDirection: 'row' }}>
-                         <TouchableOpacity style={[styles.actionButton, { marginRight: 8 }]} onPress={() => removeWorkout(item.id)}>
+                         <TouchableOpacity style={[styles.actionButton, { marginRight: 8 }]} onPress={() => removeWorkout(item.uniqueId || item.id)}>
                           <MaterialCommunityIcons name="delete-outline" size={20} color="#ef4444" />
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/screens/AddWorkoutScreen')}>
@@ -492,7 +496,7 @@ export default function CreateProgramScreen() {
                       </View>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                         <TouchableOpacity style={[styles.actionButton, { marginRight: 8 }]} onPress={() => removeWorkout(item.id)}>
+                         <TouchableOpacity style={[styles.actionButton, { marginRight: 8 }]} onPress={() => removeWorkout(item.uniqueId || item.id)}>
                           <MaterialCommunityIcons name="delete-outline" size={20} color="#ef4444" />
                         </TouchableOpacity>
                          <TouchableOpacity>
