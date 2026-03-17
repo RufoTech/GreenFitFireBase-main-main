@@ -72,6 +72,7 @@ export default function LiveWorkoutScreen() {
   
   const [loading, setLoading] = useState(true);
   const [workoutName, setWorkoutName] = useState("");
+  const [workoutDuration, setWorkoutDuration] = useState("45"); // Default duration
   const [rawExercises, setRawExercises] = useState<ExerciseBlock[]>([]);
   
   // We need to flatten the nested structure into a linear list of "steps" for the live workout
@@ -151,6 +152,7 @@ export default function LiveWorkoutScreen() {
       console.log("Workout Plan Received");
       
       setWorkoutName(data.name || "Workout");
+      setWorkoutDuration(data.duration || "45");
 
       // Flatten the structure
       const exercises: ExerciseBlock[] = data.exercises || [];
@@ -273,7 +275,7 @@ export default function LiveWorkoutScreen() {
              // Usually rest is between sets.
              // We'll just finish workout if no next item.
              Alert.alert("Workout Complete", "Great job! You've finished the workout.", [
-                { text: "Finish", onPress: () => router.back() }
+                { text: "Finish", onPress: () => router.replace('/screens/WorkoutCompleteScreen') }
               ]);
         }
         return;
@@ -282,9 +284,21 @@ export default function LiveWorkoutScreen() {
     if (currentIndex < flatWorkoutQueue.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
-      Alert.alert("Workout Complete", "Great job! You've finished the workout.", [
-        { text: "Finish", onPress: () => router.back() }
-      ]);
+      // Calculate basic stats to pass
+      const duration = workoutDuration || "45";
+      // Basic volume mock calculation if not tracked per set
+      const totalVolume = "1200"; 
+      // Basic calorie mock calculation based on duration
+      const cals = parseInt(duration) * 8; 
+
+      router.replace({
+        pathname: '/screens/WorkoutCompleteScreen',
+        params: {
+          totalTime: `${duration}m`,
+          volume: `${totalVolume}kg`,
+          calories: `${cals}kcal`
+        }
+      });
     }
   };
 
