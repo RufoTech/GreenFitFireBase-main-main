@@ -32,7 +32,7 @@ export default function CreateProgramScreen() {
   const [successProgramName, setSuccessProgramName] = useState('');
   const [successProgramId, setSuccessProgramId] = useState('');
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const weeks = [1, 2, 3, 4];
 
   // Initial workout data structure - organized by weeks
@@ -53,6 +53,7 @@ export default function CreateProgramScreen() {
         3: [],
         4: []
       });
+      setLoading(false);
       return;
     }
 
@@ -139,6 +140,10 @@ export default function CreateProgramScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
+      // If we are currently loading, DO NOT process yet. 
+      // Wait for loading to finish.
+      if (loading) return; 
+
       const { data, action, targetId } = SelectionStore.getData();
       
       if (data && action === 'add' && targetId === 'program_workout') {
@@ -146,6 +151,12 @@ export default function CreateProgramScreen() {
 
         setWorkoutsByWeek((prev: any) => {
           const currentWeekWorkouts = prev[selectedWeek] ? [...prev[selectedWeek]] : [];
+          
+          if (currentWeekWorkouts.length >= 7) {
+            setShowLimitAlert(true);
+            return prev;
+          }
+
           const nextDay = currentWeekWorkouts.length + 1;
           
           const newWorkout = { 
@@ -166,7 +177,7 @@ export default function CreateProgramScreen() {
           };
         });
       }
-    }, [selectedWeek])
+    }, [selectedWeek, loading])
   );
   const focusOptions = [
     { id: 'Gain Muscle', icon: 'fitness-center', iconLib: MaterialIcons, label: 'Gain Muscle' }, // exercise -> fitness-center (closest)

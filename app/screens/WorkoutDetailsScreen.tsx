@@ -18,6 +18,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { SelectionStore } from '../utils/SelectionStore';
+
 
 const { width } = Dimensions.get('window');
 
@@ -64,6 +66,7 @@ export default function WorkoutDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
   const [savedDocId, setSavedDocId] = useState<string | null>(null);
+  const [showLimitAlert, setShowLimitAlert] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -259,6 +262,33 @@ export default function WorkoutDetailsScreen() {
     }
   };
 
+  const handleAddToDay = () => {
+    if (!workout) return;
+    
+    // CreateProgramScreen handles the logic to check if there are 7 days already.
+    // However, since we can't easily query CreateProgramScreen's local state from here,
+    // we just use SelectionStore. The limit check will happen in CreateProgramScreen 
+    // when it receives the data.
+    
+    const totalExercises = workout.exercises.reduce((acc, block) => 
+        acc + block.sets.reduce((sAcc, set) => sAcc + set.movements.length, 0), 0
+    );
+
+    SelectionStore.setData(
+      {
+        id: workout.id,
+        title: workout.name,
+        subtitle: `${totalExercises} exercises • ${workout.duration} Min`,
+        images: [workout.coverImage],
+        extraCount: 0,
+      },
+      'add',
+      'program_workout'
+    );
+    // @ts-ignore
+    router.navigate('/screens/CreateProgramScreen');
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -331,7 +361,7 @@ export default function WorkoutDetailsScreen() {
         {/* Action Buttons */}
         <View style={styles.actionButtonsContainer}>
           {hideAddToDay !== 'true' && (
-            <TouchableOpacity style={styles.addToDayButton}>
+            <TouchableOpacity style={styles.addToDayButton} onPress={handleAddToDay}>
               <Text style={styles.addToDayText}>Add to Day</Text>
             </TouchableOpacity>
           )}
@@ -572,6 +602,10 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  summaryIcon: {
+    marginBottom: 4,
+    color: '#ccff00', // text-primary
   },
   summaryIcon: {
     marginBottom: 4,
