@@ -96,7 +96,7 @@ export default function CreateCustomWorkoutScreen() {
           category: data.type || data.category || 'General',
           exerciseId: data.id,
           name: data.name,
-          reps: data.reps || '1',
+          reps: data.reps && data.reps !== '-' ? data.reps : '1',
           setsCount: data.sets ? (isNaN(parseInt(String(data.sets))) ? 1 : parseInt(String(data.sets))) : 1,
           image: data.mainImage || data.image || 'https://via.placeholder.com/150',
           videoUrl: data.videoUrl || '',
@@ -384,9 +384,8 @@ export default function CreateCustomWorkoutScreen() {
         >
           <MaterialIcons name="arrow-back" size={24} color="#f1f5f9" />
         </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Create Custom Program</Text>
-        </View>
+        <Text style={styles.headerTitle}>Create Custom Program</Text>
+        <View style={{ width: 40 }} /> 
       </View>
 
       <ScrollView 
@@ -656,15 +655,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
-  headerTitleContainer: {
-    flex: 1,
-    paddingHorizontal: 12,
-  },
   headerTitle: {
     color: '#f1f5f9',
     fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
+    flex: 1,
   },
   scrollView: {
     flex: 1,

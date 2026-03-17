@@ -1,25 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  ImageBackground,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
-  View,
-  SafeAreaView,
-  StatusBar,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
   TextInput,
-  ImageBackground,
-  Alert,
-  Dimensions,
-  ActivityIndicator
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import firestore from '@react-native-firebase/firestore';
-import auth from '@react-native-firebase/auth';
-import { useCallback } from 'react';
 import { SelectionStore } from '../utils/SelectionStore';
 
 // Define Workout interface
@@ -96,7 +94,7 @@ export default function AddWorkoutScreen() {
                   const data = doc.data();
                   workoutsData.push({
                     id: doc.id,
-                    title: data.title || 'Custom Workout',
+                    title: data.name || data.title || 'Custom Workout',
                     duration: data.duration || '0',
                     exercises: data.exerciseCount || 0,
                     level: data.level || 'Custom',
