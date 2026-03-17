@@ -96,7 +96,7 @@ export default function AddWorkoutScreen() {
                     id: doc.id,
                     title: data.name || data.title || 'Custom Workout',
                     duration: data.duration || '0',
-                    exercises: data.exerciseCount || 0,
+                    exercises: data.exerciseCount || (data.exercises ? data.exercises.reduce((acc: number, block: any) => acc + (block.sets ? block.sets.reduce((sAcc: number, set: any) => sAcc + (set.movements ? set.movements.length : 0), 0) : 0), 0) : 0),
                     level: data.level || 'Custom',
                     levelColor: '#a855f7', // Purple for custom
                     image: data.image || 'https://via.placeholder.com/300',
