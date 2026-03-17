@@ -45,6 +45,9 @@ export default function MonthlyWorkoutLibraryScreen() {
   const [selectedProgram, setSelectedProgram] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
+  const [activeProgram, setActiveProgram] = useState<string | null>(null);
+  const [warningModalVisible, setWarningModalVisible] = useState(false);
+
   const { openProgramId } = useLocalSearchParams();
 
   const handleProgramPress = (program: any) => {
@@ -62,6 +65,16 @@ export default function MonthlyWorkoutLibraryScreen() {
       }
 
       setLoading(true);
+
+      // Fetch user's active program to check later
+      const unsubscribeUser = firestore()
+        .collection('users')
+        .doc(user.uid)
+        .onSnapshot((doc) => {
+          if (doc.exists) {
+            setActiveProgram(doc.data()?.activeProgramId || null);
+          }
+        });
 
       const unsubscribe = firestore()
         .collection('user_programs')
@@ -179,9 +192,45 @@ export default function MonthlyWorkoutLibraryScreen() {
           }
         );
 
-      return unsubscribe;
+      return () => {
+        unsubscribeUser();
+        unsubscribe();
+      };
     }, [openProgramId]) // Re-run if openProgramId changes
   );
+
+  const handleStartProgram = async () => {
+    if (selectedProgram?.id) {
+      try {
+        const user = auth().currentUser;
+        if (user) {
+          await firestore()
+            .collection('users')
+            .doc(user.uid)
+            .set({ activeProgramId: selectedProgram.id }, { merge: true });
+        }
+      } catch (error) {
+        console.error("Error setting active program:", error);
+      }
+      
+      setWarningModalVisible(false);
+      setModalVisible(false);
+      
+      router.push({
+        pathname: '/screens/WeeklyProgramScreen',
+        params: { programId: selectedProgram.id }
+      });
+    }
+  };
+
+  const onStartNowPress = () => {
+    // If user has an active program and it's different from the selected one, show warning
+    if (activeProgram && activeProgram !== selectedProgram?.id) {
+      setWarningModalVisible(true);
+    } else {
+      handleStartProgram();
+    }
+  };
 
   const handleDeleteProgram = (programId: string) => {
       Alert.alert(
@@ -194,6 +243,21 @@ export default function MonthlyWorkoutLibraryScreen() {
                   style: "destructive",
                   onPress: async () => {
                       try {
+                          const user = auth().currentUser;
+                          
+                          // Check if the deleted program is the currently active one
+                          if (user) {
+                            const userDoc = await firestore().collection('users').doc(user.uid).get();
+                            const userData = userDoc.data();
+                            
+                            if (userData?.activeProgramId === programId) {
+                              // If it is, remove it from the user's active program
+                              await firestore().collection('users').doc(user.uid).update({
+                                activeProgramId: firestore.FieldValue.delete()
+                              });
+                            }
+                          }
+
                           await Promise.all([
                             firestore().collection('user_programs').doc(programId).delete(),
                             firestore().collection('user_program_weeks').doc(programId).delete(),
@@ -501,26 +565,7 @@ export default function MonthlyWorkoutLibraryScreen() {
                         <TouchableOpacity 
                             style={styles.startNowButton}
                             activeOpacity={0.8}
-                            onPress={async () => {
-                                setModalVisible(false);
-                                if (selectedProgram?.id) {
-                                  try {
-                                    const user = auth().currentUser;
-                                    if (user) {
-                                      // Save the selected program ID as the user's active program
-                                      await firestore()
-                                        .collection('users')
-                                        .doc(user.uid)
-                                        .set({ activeProgramId: selectedProgram.id }, { merge: true });
-                                    }
-                                  } catch (error) {
-                                    console.error("Error setting active program:", error);
-                                  }
-                                  
-                                  // Navigate to Dashboard
-                                  router.replace('/(tabs)/');
-                                }
-                            }}
+                            onPress={onStartNowPress}
                         >
                             <Text style={styles.startNowButtonText}>START NOW</Text>
                         </TouchableOpacity>
@@ -538,6 +583,52 @@ export default function MonthlyWorkoutLibraryScreen() {
              </SafeAreaView>
         </View>
       </Modal>
+
+      {/* Warning Modal */}
+      <Modal
+        visible={warningModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setWarningModalVisible(false)}
+      >
+        <View style={styles.warningModalOverlay}>
+          <View style={styles.warningModalCard}>
+            
+            <View style={styles.warningModalIconContainer}>
+              <View style={styles.warningModalIconBg}>
+                <MaterialIcons name="warning" size={40} color="#ccff00" />
+              </View>
+            </View>
+
+            <View style={styles.warningModalTextContent}>
+              <Text style={styles.warningModalTitle}>Active Workout Detected</Text>
+              <Text style={styles.warningModalDescription}>
+                You currently have an active workout. If you start a new workout, your current one will be stopped. Are you sure you want to continue?
+              </Text>
+            </View>
+
+            <View style={styles.warningModalActions}>
+              <TouchableOpacity 
+                style={styles.warningModalYesBtn}
+                onPress={handleStartProgram}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.warningModalYesText}>Yes, Continue</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.warningModalCancelBtn}
+                onPress={() => setWarningModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.warningModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -1080,5 +1171,94 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 1,
+  },
+  
+  // Warning Modal Styles
+  warningModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  warningModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#1c1f0f',
+    borderRadius: 32,
+    padding: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  warningModalIconContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  warningModalIconBg: {
+    width: 80,
+    height: 80,
+    backgroundColor: 'rgba(204, 255, 0, 0.1)',
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(204, 255, 0, 0.2)',
+  },
+  warningModalTextContent: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  warningModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  warningModalDescription: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  warningModalActions: {
+    flexDirection: 'column',
+    gap: 16,
+  },
+  warningModalYesBtn: {
+    width: '100%',
+    backgroundColor: '#ccff00',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#ccff00',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  warningModalYesText: {
+    color: '#12140a',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  warningModalCancelBtn: {
+    width: '100%',
+    backgroundColor: 'transparent',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  warningModalCancelText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });
