@@ -10,9 +10,13 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.radevolopment.greenfit"
+      "bundleIdentifier": "com.radevolopment.greenfit",
+      "infoPlist": {
+        "NSMotionUsageDescription": "This app uses the motion sensor to count your steps."
+      }
     },
     "android": {
+      "permissions": ["android.permission.ACTIVITY_RECOGNITION"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

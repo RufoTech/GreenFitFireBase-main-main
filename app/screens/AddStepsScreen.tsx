@@ -1,41 +1,18 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Platform, StatusBar, Dimensions } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Platform, StatusBar, Dimensions, AppState, AppStateStatus } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { Pedometer } from 'expo-sensors';
+import { getStoredSteps, saveSteps, getLast7DaysSteps, getMonthSteps, formatDate, DailySteps } from '../utils/stepManager';
 
 const PRIMARY = "#ccff00";
 const BG_DARK = "#1f230f";
 const { width } = Dimensions.get('window');
 
-const calendarData = {
-  leadingEmpty: 6,
-  days: [
-    { day: 1, level: "border-low" },
-    { day: 2, level: "border-mid" },
-    { day: 3, level: "fill-low" },
-    { day: 4, level: "full-glow" },
-    { day: 5, level: "fill-high" },
-    { day: 6, level: "border-full" },
-    { day: 7, level: "fill-xlow" },
-    { day: 8, level: "full" },
-    { day: 9, level: "full" },
-    { day: 10, level: "border-mid" },
-    { day: 11, level: "full" },
-    { day: 12, level: "border-full" },
-    { day: 13, level: "fill-mid" },
-    { day: 14, level: "border-xlow" },
-    { day: 15, level: "fill-xhigh" },
-    { day: 16, level: "full" },
-    ...Array.from({ length: 15 }, (_, i) => ({ day: i + 17, level: "empty" })),
-  ],
-};
-
-const recentDays = [
-  { date: "Oct 26 | 26 Oktyabr", steps: 8100, goal: 10000 },
-  { date: "Oct 25 | 25 Oktyabr", steps: 5200, goal: 10000 },
-  { date: "Oct 24 | 24 Oktyabr", steps: 11200, goal: 10000 },
-];
+const GOAL_COUNT = 10000;
+const R = 110;
+const CIRC = 2 * Math.PI * R;
 
 const levelStyles: any = {
   "border-low": { borderWidth: 2, borderColor: `${PRIMARY}33` },
@@ -68,17 +45,194 @@ const getLevelTextColor = (level: string) => {
     return '#94a3b8';
 }
 
+const getLevelForSteps = (steps: number, goal: number) => {
+    const p = steps / goal;
+    if (p >= 1) return "full-glow"; // Met goal
+    if (p >= 0.8) return "fill-high";
+    if (p >= 0.6) return "fill-mid";
+    if (p >= 0.4) return "fill-low";
+    if (p >= 0.2) return "fill-xlow";
+    if (p > 0) return "border-xlow";
+    return "empty";
+};
+
 const weekDays = ["M", "T", "W", "T", "F", "S", "S"];
-const stepsCount = 6450;
-const goalCount = 10000;
-const pct = Math.round((stepsCount / goalCount) * 100);
-const R = 110;
-const circ = 2 * Math.PI * R;
-const offset = circ - (pct / 100) * circ;
 
 export default function AddStepsScreen() {
   const [calOpen, setCalOpen] = useState(true);
   const router = useRouter();
+  
+  // Pedometer State
+  const [currentSteps, setCurrentSteps] = useState(0);
+  const [isPedometerAvailable, setIsPedometerAvailable] = useState('checking');
+  const [pastDays, setPastDays] = useState<DailySteps[]>([]);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [calendarDays, setCalendarDays] = useState<any[]>([]);
+  const subscription = useRef<Pedometer.Subscription | null>(null);
+  const appState = useRef(AppState.currentState);
+
+  // Load initial data
+  useEffect(() => {
+    const init = async () => {
+      const available = await Pedometer.isAvailableAsync();
+      setIsPedometerAvailable(String(available));
+
+      if (available) {
+        // Load today's stored steps first
+        const today = new Date();
+        const stored = await getStoredSteps(today);
+        setCurrentSteps(stored);
+        
+        // Start tracking
+        subscribe();
+      }
+
+      // Load history
+      loadHistory();
+    };
+
+    init();
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      unsubscribe();
+      subscription.remove();
+    };
+  }, []);
+
+  // Effect to update calendar when month changes or steps update
+  useEffect(() => {
+    loadCalendarData();
+  }, [currentMonth, currentSteps]); // Reload when steps update to reflect today's progress in calendar
+
+  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      // App came to foreground
+      // We might want to refresh data here
+      loadHistory();
+    }
+    appState.current = nextAppState;
+  };
+
+  const subscribe = async () => {
+    const isAvailable = await Pedometer.isAvailableAsync();
+    if (isAvailable) {
+      if (subscription.current) return;
+      
+      // Get the initial count for today from storage again to be sure
+      const today = new Date();
+      let startSteps = await getStoredSteps(today);
+      
+      // Since watchStepCount returns steps since subscription, 
+      // we just add the delta to our state and save.
+      // However, a simpler way is to trust the pedometer's cumulative count for the session
+      // and add it to the stored 'base' count.
+      // But if the app is killed, the session resets.
+      // So we will just add the *new* steps to the stored value.
+      
+      let previousStepCount: number | null = null;
+      let lastDateString = formatDate(new Date());
+
+      subscription.current = Pedometer.watchStepCount(result => {
+        const now = new Date();
+        const currentDateString = formatDate(now);
+        const stepsSinceSubscription = result.steps;
+        
+        if (previousStepCount === null) {
+            previousStepCount = stepsSinceSubscription;
+            return;
+        }
+
+        const delta = stepsSinceSubscription - previousStepCount;
+        previousStepCount = stepsSinceSubscription;
+
+        if (delta > 0) {
+            setCurrentSteps(prev => {
+                // Check for day change
+                if (currentDateString !== lastDateString) {
+                    // New day! 
+                    // Save the 'prev' steps to the old date (already done by previous updates)
+                    // But we should ensure the *new* steps go to the new date.
+                    // Reset 'prev' to 0 conceptually for the new day.
+                    lastDateString = currentDateString;
+                    const newTotal = delta;
+                    saveSteps(now, newTotal);
+                    return newTotal;
+                } else {
+                    const newTotal = prev + delta;
+                    saveSteps(now, newTotal);
+                    return newTotal;
+                }
+            });
+        }
+      });
+    }
+  };
+
+  const unsubscribe = () => {
+    subscription.current && subscription.current.remove();
+    subscription.current = null;
+  };
+
+  const loadHistory = async () => {
+    const days = await getLast7DaysSteps();
+    setPastDays(days);
+  };
+
+  const loadCalendarData = async () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    
+    // Get stored steps for the month
+    const monthSteps = await getMonthSteps(year, month);
+    
+    // Calculate leading empty days
+    // getDay() returns 0 for Sunday. We want Monday to be 0 if possible, or adjust.
+    // The UI has "M T W T F S S". So Monday is first.
+    // Standard getDay: Sun=0, Mon=1...Sat=6.
+    // To make Mon=0: (day + 6) % 7
+    const firstDay = new Date(year, month, 1).getDay();
+    const leadingEmpty = (firstDay + 6) % 7;
+
+    const days = monthSteps.map((d, index) => ({
+      day: index + 1,
+      level: getLevelForSteps(d.steps, d.goal)
+    }));
+    
+    // If we are in the current month, update today's entry with live data
+    const today = new Date();
+    if (today.getFullYear() === year && today.getMonth() === month) {
+        const todayDay = today.getDate();
+        const todayIndex = days.findIndex(d => d.day === todayDay);
+        if (todayIndex !== -1) {
+            days[todayIndex].level = getLevelForSteps(currentSteps, GOAL_COUNT);
+        }
+    }
+
+    setCalendarDays({ leadingEmpty, days });
+  };
+
+  const changeMonth = (delta: number) => {
+    const newDate = new Date(currentMonth);
+    newDate.setMonth(newDate.getMonth() + delta);
+    setCurrentMonth(newDate);
+  };
+
+  const pct = Math.min(Math.round((currentSteps / GOAL_COUNT) * 100), 100);
+  const offset = CIRC - (pct / 100) * CIRC;
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  
+  const monthNamesAz = [
+    "Yanvar", "Fevral", "Mart", "Aprel", "May", "İyun",
+    "İyul", "Avqust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"
+  ];
+
+  const currentMonthName = `${monthNames[currentMonth.getMonth()]} | ${monthNamesAz[currentMonth.getMonth()]}`;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -118,18 +272,20 @@ export default function AddStepsScreen() {
                         fill="transparent"
                         stroke={PRIMARY}
                         strokeWidth="12"
-                        strokeDasharray={circ}
+                        strokeDasharray={CIRC}
                         strokeDashoffset={offset}
                         strokeLinecap="round"
                     />
                 </Svg>
                 <View style={styles.progressTextContainer}>
-                    <Text style={styles.stepsText}>{stepsCount.toLocaleString()}</Text>
-                    <Text style={styles.goalText}>/ {goalCount.toLocaleString()}</Text>
+                    <Text style={styles.stepsText}>{currentSteps.toLocaleString()}</Text>
+                    <Text style={styles.goalText}>/ {GOAL_COUNT.toLocaleString()}</Text>
                 </View>
             </View>
             <View style={styles.motivationContainer}>
-                <Text style={styles.motivationTitle}>Keep moving!</Text>
+                <Text style={styles.motivationTitle}>
+                    {pct >= 100 ? "Goal Reached!" : "Keep moving!"}
+                </Text>
             </View>
         </View>
 
@@ -162,10 +318,18 @@ export default function AddStepsScreen() {
                         />
                     </TouchableOpacity>
                 </View>
-                <Text style={styles.monthText}>October | Oktyabr</Text>
+                <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
+                    <TouchableOpacity onPress={() => changeMonth(-1)}>
+                        <MaterialIcons name="chevron-left" size={24} color={PRIMARY} />
+                    </TouchableOpacity>
+                    <Text style={styles.monthText}>{currentMonthName}</Text>
+                    <TouchableOpacity onPress={() => changeMonth(1)}>
+                        <MaterialIcons name="chevron-right" size={24} color={PRIMARY} />
+                    </TouchableOpacity>
+                </View>
             </View>
 
-            {calOpen && (
+            {calOpen && calendarDays.days && (
                 <View style={styles.calendarCard}>
                     <View style={styles.weekDaysGrid}>
                         {weekDays.map((d, i) => (
@@ -173,10 +337,10 @@ export default function AddStepsScreen() {
                         ))}
                     </View>
                     <View style={styles.daysGrid}>
-                        {Array.from({ length: calendarData.leadingEmpty }, (_, i) => (
+                        {Array.from({ length: calendarDays.leadingEmpty || 0 }, (_, i) => (
                             <View key={`e-${i}`} style={styles.dayCell} />
                         ))}
-                        {calendarData.days.map(({ day, level }: any) => (
+                        {calendarDays.days.map(({ day, level }: any) => (
                             <View 
                                 key={day} 
                                 style={[styles.dayCell, styles.dayCircle, levelStyles[level]]}
@@ -203,7 +367,7 @@ export default function AddStepsScreen() {
         <View style={styles.section}>
             <Text style={styles.sectionTitle}>Last 7 Days | Son 7 gün</Text>
             <View style={styles.recentList}>
-                {recentDays.map(({ date, steps: s, goal: g }, index) => {
+                {pastDays.map(({ date, steps: s, goal: g }, index) => {
                     const p = Math.min((s / g) * 100, 100);
                     const met = s >= g;
                     return (
@@ -305,12 +469,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#f1f5f9',
-  },
-  motivationSubtitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: PRIMARY,
-    marginTop: 4,
   },
   section: {
     paddingHorizontal: 16,
