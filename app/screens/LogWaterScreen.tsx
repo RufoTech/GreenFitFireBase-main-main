@@ -4,6 +4,8 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { getWaterLogs, createWaterLog, removeWaterLog, getDailyGoal, setDailyGoal, WaterLog, saveWaterLogs } from '../utils/waterManager';
+import { scheduleHydrationReminders } from '../utils/notificationManager';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const PRIMARY = "#ccff00";
 const BG_DARK = "#12140a"; 
@@ -25,6 +27,23 @@ export default function LogWaterScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isGoalEditing, setIsGoalEditing] = useState(false);
   const [tempGoal, setTempGoal] = useState("");
+  
+  // Reminder State
+  const [startTime, setStartTime] = useState(() => {
+      const d = new Date();
+      d.setHours(8, 0, 0, 0);
+      return d;
+  });
+  const [endTime, setEndTime] = useState(() => {
+      const d = new Date();
+      d.setHours(22, 0, 0, 0);
+      return d;
+  });
+  const [frequency, setFrequency] = useState(60); // minutes
+  const [customFreq, setCustomFreq] = useState("");
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+
   const router = useRouter();
 
   // Calculate percentage for ring
@@ -157,6 +176,37 @@ export default function LogWaterScreen() {
       await setDailyGoal(goal);
       Alert.alert("Success", "Water log saved successfully!");
       router.back();
+  };
+
+  const handleSaveReminder = async () => {
+      let interval = frequency;
+      if (customFreq) {
+          const custom = parseInt(customFreq);
+          if (custom > 0) interval = custom;
+      }
+
+      const success = await scheduleHydrationReminders(startTime, endTime, interval);
+      
+      if (success) {
+          setReminderVisible(false);
+          Alert.alert("Success", `Hydration reminder set every ${interval} minutes!`);
+      } else {
+          Alert.alert("Permission Required", "Please enable notifications to set reminders.");
+      }
+  };
+
+  const onStartTimeChange = (event: any, selectedTime?: Date) => {
+      setShowStartTimePicker(false);
+      if (selectedTime) {
+          setStartTime(selectedTime);
+      }
+  };
+
+  const onEndTimeChange = (event: any, selectedTime?: Date) => {
+      setShowEndTimePicker(false);
+      if (selectedTime) {
+          setEndTime(selectedTime);
+      }
   };
 
   return (
@@ -419,23 +469,14 @@ export default function LogWaterScreen() {
                             <MaterialIcons name="schedule" size={16} color={TEXT_COLOR} />
                             <Text style={styles.timeLabel}>Start Time</Text>
                         </View>
-                        <View style={styles.timePicker}>
-                            <View style={styles.timeColumn}>
-                                <Text style={styles.timeTextSmall}>07</Text>
-                                <View style={styles.timeSelected}>
-                                    <Text style={styles.timeTextSelected}>08</Text>
-                                </View>
-                                <Text style={styles.timeTextSmall}>09</Text>
-                            </View>
-                            <Text style={styles.timeSeparator}>:</Text>
-                            <View style={styles.timeColumn}>
-                                <Text style={styles.timeTextSmall}>45</Text>
-                                <View style={styles.timeSelected}>
-                                    <Text style={styles.timeTextSelected}>00</Text>
-                                </View>
-                                <Text style={styles.timeTextSmall}>15</Text>
-                            </View>
-                        </View>
+                        <TouchableOpacity 
+                            style={styles.timePickerButton}
+                            onPress={() => setShowStartTimePicker(true)}
+                        >
+                            <Text style={styles.timePickerText}>
+                                {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                        </TouchableOpacity>
                     </View>
 
                     {/* End Time */}
@@ -444,53 +485,85 @@ export default function LogWaterScreen() {
                             <MaterialIcons name="bedtime" size={16} color={TEXT_COLOR} />
                             <Text style={styles.timeLabel}>End Time</Text>
                         </View>
-                        <View style={styles.timePicker}>
-                            <View style={styles.timeColumn}>
-                                <Text style={styles.timeTextSmall}>21</Text>
-                                <View style={styles.timeSelected}>
-                                    <Text style={styles.timeTextSelected}>22</Text>
-                                </View>
-                                <Text style={styles.timeTextSmall}>23</Text>
-                            </View>
-                            <Text style={styles.timeSeparator}>:</Text>
-                            <View style={styles.timeColumn}>
-                                <Text style={styles.timeTextSmall}>15</Text>
-                                <View style={styles.timeSelected}>
-                                    <Text style={styles.timeTextSelected}>30</Text>
-                                </View>
-                                <Text style={styles.timeTextSmall}>45</Text>
-                            </View>
-                        </View>
+                        <TouchableOpacity 
+                            style={styles.timePickerButton}
+                            onPress={() => setShowEndTimePicker(true)}
+                        >
+                            <Text style={styles.timePickerText}>
+                                {endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                        </TouchableOpacity>
                     </View>
 
                     {/* Frequency */}
                     <View style={styles.freqSection}>
                         <View style={styles.timeLabelContainer}>
                             <MaterialIcons name="notifications-active" size={16} color={TEXT_COLOR} />
-                            <Text style={styles.timeLabel}>Frequency</Text>
+                            <Text style={styles.timeLabel}>Frequency (min)</Text>
                         </View>
                         <View style={styles.freqGrid}>
-                            <TouchableOpacity style={styles.freqButton}>
-                                <Text style={styles.freqButtonText}>Every 30m</Text>
+                            <TouchableOpacity 
+                                style={[styles.freqButton, frequency === 30 && !customFreq && styles.freqButtonActive]}
+                                onPress={() => { setFrequency(30); setCustomFreq(""); }}
+                            >
+                                <Text style={[styles.freqButtonText, frequency === 30 && !customFreq && styles.freqButtonTextActive]}>30m</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.freqButtonActive}>
-                                <Text style={styles.freqButtonTextActive}>Every 1h</Text>
+                            <TouchableOpacity 
+                                style={[styles.freqButton, frequency === 60 && !customFreq && styles.freqButtonActive]}
+                                onPress={() => { setFrequency(60); setCustomFreq(""); }}
+                            >
+                                <Text style={[styles.freqButtonText, frequency === 60 && !customFreq && styles.freqButtonTextActive]}>60m</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.freqButton}>
-                                <Text style={styles.freqButtonText}>Every 2h</Text>
+                            <TouchableOpacity 
+                                style={[styles.freqButton, frequency === 120 && !customFreq && styles.freqButtonActive]}
+                                onPress={() => { setFrequency(120); setCustomFreq(""); }}
+                            >
+                                <Text style={[styles.freqButtonText, frequency === 120 && !customFreq && styles.freqButtonTextActive]}>120m</Text>
                             </TouchableOpacity>
+                        </View>
+                        
+                        {/* Custom Frequency Input */}
+                        <View style={styles.customFreqContainer}>
+                            <TextInput
+                                style={styles.customFreqInput}
+                                placeholder="Custom minutes"
+                                placeholderTextColor={SUBTEXT}
+                                keyboardType="numeric"
+                                value={customFreq}
+                                onChangeText={(text) => {
+                                    setCustomFreq(text);
+                                    if (text) setFrequency(0); // Deselect presets
+                                }}
+                            />
                         </View>
                     </View>
                 </View>
 
+                {showStartTimePicker && (
+                    <DateTimePicker
+                        value={startTime}
+                        mode="time"
+                        is24Hour={true}
+                        display="default"
+                        onChange={onStartTimeChange}
+                    />
+                )}
+
+                {showEndTimePicker && (
+                    <DateTimePicker
+                        value={endTime}
+                        mode="time"
+                        is24Hour={true}
+                        display="default"
+                        onChange={onEndTimeChange}
+                    />
+                )}
+
                 <TouchableOpacity 
                     style={styles.modalSaveButton} 
-                    onPress={() => {
-                        setReminderVisible(false);
-                        Alert.alert("Success", "Hydration reminder set successfully!");
-                    }}
+                    onPress={handleSaveReminder}
                 >
-                    <Text style={styles.modalSaveButtonText}>Save</Text>
+                    <Text style={styles.modalSaveButtonText}>Save Reminder</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -937,41 +1010,19 @@ const styles = StyleSheet.create({
       fontWeight: '600',
       color: TEXT_COLOR,
   },
-  timePicker: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 12,
-  },
-  timeColumn: {
+  timePickerButton: {
       backgroundColor: 'rgba(255, 255, 255, 0.05)',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
       borderRadius: 12,
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.1)',
       alignItems: 'center',
-      width: 60,
-      overflow: 'hidden',
   },
-  timeTextSmall: {
-      fontSize: 14,
-      color: SUBTEXT,
-      paddingVertical: 10,
-  },
-  timeSelected: {
-      backgroundColor: 'rgba(204, 255, 0, 0.2)',
-      width: '100%',
-      alignItems: 'center',
-      paddingVertical: 12,
-  },
-  timeTextSelected: {
+  timePickerText: {
+      color: PRIMARY,
       fontSize: 18,
       fontWeight: '700',
-      color: PRIMARY,
-  },
-  timeSeparator: {
-      fontSize: 24,
-      fontWeight: '700',
-      color: SUBTEXT,
   },
   freqSection: {
       gap: 12,
@@ -1013,6 +1064,19 @@ const styles = StyleSheet.create({
       color: PRIMARY,
       fontSize: 12,
       fontWeight: '700',
+  },
+  customFreqContainer: {
+      marginTop: 4,
+  },
+  customFreqInput: {
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+      color: TEXT_COLOR,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      fontSize: 14,
   },
   modalSaveButton: {
       width: '100%',
