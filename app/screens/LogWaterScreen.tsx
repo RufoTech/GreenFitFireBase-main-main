@@ -1,47 +1,68 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Platform, StatusBar, TextInput, ScrollView, Dimensions, Alert, Modal } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
+import { getWaterLogs, createWaterLog, removeWaterLog, getDailyGoal, setDailyGoal, WaterLog, saveWaterLogs } from '../utils/waterManager';
 
 const PRIMARY = "#ccff00";
-const BG_DARK = "#12140a"; // Updated from HTML
-const CARD_BG = "rgba(255, 255, 255, 0.05)";
+const BG_DARK = "#12140a"; 
 const TEXT_COLOR = "#f1f5f9";
 const SUBTEXT = "#94a3b8";
-const GOAL = 2500;
 const { width, height } = Dimensions.get('window');
 
-const initialHistory = [
-  { id: 1, label: "Glass of water", time: "08:30 AM", amount: 250, icon: "water-outline" },
-  { id: 2, label: "Sports Bottle", time: "11:15 AM", amount: 500, icon: "bottle-soda-classic-outline" },
-  { id: 3, label: "Large Bottle", time: "02:45 PM", amount: 450, icon: "water-percent" },
+const monthNames = ["January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
 ];
 
 export default function LogWaterScreen() {
-  const [consumed, setConsumed] = useState(1200);
+  const [consumed, setConsumed] = useState(0);
+  const [goal, setGoal] = useState(2500);
   const [customAmount, setCustomAmount] = useState("");
-  const [history, setHistory] = useState(initialHistory);
+  const [history, setHistory] = useState<WaterLog[]>([]);
   const [weekDays, setWeekDays] = useState<any[]>([]);
   const [reminderVisible, setReminderVisible] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [isGoalEditing, setIsGoalEditing] = useState(false);
+  const [tempGoal, setTempGoal] = useState("");
   const router = useRouter();
 
   // Calculate percentage for ring
-  const percentage = Math.min(Math.round((consumed / GOAL) * 100), 100);
-  const R = 115; // Radius from HTML size-64 (256px) -> ~115 radius accounting for stroke
+  const percentage = Math.min(Math.round((consumed / goal) * 100), 100);
+  const R = 115; 
   const CIRC = 2 * Math.PI * R;
   const strokeDashoffset = CIRC - (percentage / 100) * CIRC;
 
+  const loadData = async (date: Date) => {
+      const data = await getWaterLogs(date);
+      setConsumed(data.totalConsumed);
+      setHistory(data.logs);
+      
+      // Goal is global, but we can update it if needed or just use current state if we want persistent global goal
+      const storedGoal = await getDailyGoal();
+      setGoal(storedGoal);
+  };
+
+  useFocusEffect(
+      useCallback(() => {
+          loadData(selectedDate);
+      }, [selectedDate])
+  );
+
   useEffect(() => {
-    // Generate current week days
+    generateCalendar(selectedDate);
+  }, [selectedDate]);
+
+  const generateCalendar = (date: Date) => {
     const days = [];
-    const today = new Date();
-    const currentDay = today.getDay(); // 0-6 (Sun-Sat)
+    // Show 7 days window centering the selected date or just a week view?
+    // User asked: "yuxarıdaki calendarda indiki günümüz qeyd olunsun ayın 18 indeyikse 18i aktiv olacaq.ve calendar teqvimide olsun yuxarıda aylara göre baxa bilek."
+    // Let's make a simple week view for now that contains the selected Date.
     
-    // Adjust to start from Mon or just show current week centering today? 
-    // HTML shows Mon-Sun. Let's generate Mon-Sun for current week.
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - (currentDay === 0 ? 6 : currentDay - 1));
+    // Find Monday of the current week for the selected date
+    const currentDay = date.getDay(); // 0-6
+    const monday = new Date(date);
+    monday.setDate(date.getDate() - (currentDay === 0 ? 6 : currentDay - 1));
 
     const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     
@@ -51,25 +72,63 @@ export default function LogWaterScreen() {
         days.push({
             dayName: dayNames[i],
             dayNumber: d.getDate(),
-            isToday: d.getDate() === today.getDate() && d.getMonth() === today.getMonth()
+            fullDate: new Date(d),
+            isSelected: d.getDate() === date.getDate() && d.getMonth() === date.getMonth() && d.getFullYear() === date.getFullYear(),
+            isToday: isSameDay(d, new Date())
         });
     }
     setWeekDays(days);
-  }, []);
-
-  const addWater = (amount: number, label: string, icon: string) => {
-    const now = new Date();
-    const time = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-    setConsumed((prev) => Math.min(prev + amount, GOAL * 2)); // Allow exceeding goal
-    setHistory((prev) => [
-      { id: Date.now(), label, time, amount, icon },
-      ...prev,
-    ]);
   };
 
-  const deleteItem = (id: number, amount: number) => {
-      setConsumed(prev => Math.max(0, prev - amount));
-      setHistory(prev => prev.filter(item => item.id !== id));
+  const isSameDay = (d1: Date, d2: Date) => {
+      return d1.getDate() === d2.getDate() && d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
+  }
+
+  const handleDayPress = (date: Date) => {
+      setSelectedDate(date);
+  };
+
+  const handlePrevWeek = () => {
+      const newDate = new Date(selectedDate);
+      newDate.setDate(newDate.getDate() - 7);
+      setSelectedDate(newDate);
+  };
+
+  const handleNextWeek = () => {
+      const newDate = new Date(selectedDate);
+      newDate.setDate(newDate.getDate() + 7);
+      setSelectedDate(newDate);
+  };
+
+  const addWater = (amount: number, label: string, icon: string) => {
+    // Just update state, don't save to storage yet
+    const now = new Date();
+    const time = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    const newLog: WaterLog = {
+        id: Date.now(),
+        label,
+        time,
+        amount,
+        icon,
+        timestamp: now.getTime()
+    };
+    
+    const newHistory = [newLog, ...history];
+    setHistory(newHistory);
+    
+    // Calculate new total consumed
+    const newTotal = newHistory.reduce((sum, item) => sum + item.amount, 0);
+    setConsumed(newTotal);
+  };
+
+  const deleteItem = (id: number) => {
+      // Just update state, don't save to storage yet
+      const newHistory = history.filter(item => item.id !== id);
+      setHistory(newHistory);
+      
+      // Calculate new total consumed
+      const newTotal = newHistory.reduce((sum, item) => sum + item.amount, 0);
+      setConsumed(newTotal);
   };
 
   const handleCustomAdd = () => {
@@ -78,6 +137,26 @@ export default function LogWaterScreen() {
       addWater(val, `Custom amount`, "water-plus-outline");
       setCustomAmount("");
     }
+  };
+
+  const handleGoalUpdate = async () => {
+      const newGoal = parseInt(tempGoal);
+      if (newGoal > 0) {
+          // Goal is still saved immediately as it might be a global preference, 
+          // or we can make it local too? Let's keep it immediate for now as per usual settings behavior,
+          // OR if user wants "everything" to be saved only on Save Program, we should defer this too.
+          // User said "save olunmasın elediyi deyişiklikler". So let's defer goal too.
+          setGoal(newGoal);
+          setIsGoalEditing(false);
+      }
+  };
+
+  const handleSaveProgram = async () => {
+      // Save everything to storage
+      await saveWaterLogs(selectedDate, history, consumed);
+      await setDailyGoal(goal);
+      Alert.alert("Success", "Water log saved successfully!");
+      router.back();
   };
 
   return (
@@ -105,21 +184,33 @@ export default function LogWaterScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
+        {/* Month Navigation */}
+        <View style={styles.monthNav}>
+            <TouchableOpacity onPress={handlePrevWeek}>
+                <MaterialIcons name="chevron-left" size={24} color={SUBTEXT} />
+            </TouchableOpacity>
+            <Text style={styles.monthTitle}>{monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}</Text>
+            <TouchableOpacity onPress={handleNextWeek}>
+                <MaterialIcons name="chevron-right" size={24} color={SUBTEXT} />
+            </TouchableOpacity>
+        </View>
+
         {/* Week View Calendar */}
         <View style={styles.calendarContainer}>
             {weekDays.map((day, index) => (
-                <View key={index} style={styles.dayColumn}>
-                    <Text style={styles.dayName}>{day.dayName}</Text>
+                <TouchableOpacity key={index} style={styles.dayColumn} onPress={() => handleDayPress(day.fullDate)}>
+                    <Text style={[styles.dayName, day.isSelected && { color: PRIMARY }]}>{day.dayName}</Text>
                     <View style={[
                         styles.dayCircle, 
-                        day.isToday && styles.activeDayCircle
+                        day.isSelected && styles.activeDayCircle,
+                        day.isToday && !day.isSelected && styles.todayCircle
                     ]}>
                         <Text style={[
                             styles.dayNumber,
-                            day.isToday && styles.activeDayNumber
+                            day.isSelected && styles.activeDayNumber
                         ]}>{day.dayNumber}</Text>
                     </View>
-                </View>
+                </TouchableOpacity>
             ))}
         </View>
 
@@ -162,7 +253,28 @@ export default function LogWaterScreen() {
                     <View style={styles.valueContainer}>
                         <Text style={styles.consumedText}>{(consumed / 1000).toFixed(1)}</Text>
                         <Text style={styles.separatorText}>/</Text>
-                        <Text style={styles.goalText}>{(GOAL / 1000).toFixed(1)}L</Text>
+                        
+                        {isGoalEditing ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TextInput 
+                                    value={tempGoal}
+                                    onChangeText={setTempGoal}
+                                    style={styles.goalInput}
+                                    keyboardType="numeric"
+                                    autoFocus
+                                    onBlur={handleGoalUpdate}
+                                    onSubmitEditing={handleGoalUpdate}
+                                />
+                                <Text style={styles.goalText}>L</Text>
+                            </View>
+                        ) : (
+                            <TouchableOpacity onPress={() => {
+                                setTempGoal(goal.toString());
+                                setIsGoalEditing(true);
+                            }}>
+                                <Text style={styles.goalText}>{(goal / 1000).toFixed(1)}L</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                     <Text style={styles.percentageText}>{percentage}% Completed</Text>
                 </View>
@@ -170,7 +282,7 @@ export default function LogWaterScreen() {
 
             <View style={styles.dailyGoalContainer}>
                 <Text style={styles.dailyGoalTitle}>Daily Goal</Text>
-                <Text style={styles.dailyGoalSubtitle}>Stay hydrated for better performance</Text>
+                <Text style={styles.dailyGoalSubtitle}>Tap value to edit goal</Text>
             </View>
         </View>
 
@@ -224,32 +336,36 @@ export default function LogWaterScreen() {
         {/* History List */}
         <View style={[styles.section, { paddingBottom: 20 }]}>
             <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Today's History</Text>
+                <Text style={styles.sectionTitle}>History ({isSameDay(selectedDate, new Date()) ? "Today" : monthNames[selectedDate.getMonth()] + " " + selectedDate.getDate()})</Text>
                 <TouchableOpacity>
                     <Text style={styles.viewAllText}>View All</Text>
                 </TouchableOpacity>
             </View>
 
             <View style={styles.historyList}>
-                {history.map((item) => (
-                    <View key={item.id} style={styles.historyItem}>
-                        <View style={styles.historyLeft}>
-                            <View style={styles.historyIconContainer}>
-                                <MaterialCommunityIcons name={item.icon as any} size={20} color={PRIMARY} />
+                {history.length === 0 ? (
+                    <Text style={{ color: SUBTEXT, textAlign: 'center', padding: 20 }}>No records for this day.</Text>
+                ) : (
+                    history.map((item) => (
+                        <View key={item.id} style={styles.historyItem}>
+                            <View style={styles.historyLeft}>
+                                <View style={styles.historyIconContainer}>
+                                    <MaterialCommunityIcons name={item.icon as any} size={20} color={PRIMARY} />
+                                </View>
+                                <View>
+                                    <Text style={styles.historyLabel}>{item.label}</Text>
+                                    <Text style={styles.historyTime}>{item.time}</Text>
+                                </View>
                             </View>
-                            <View>
-                                <Text style={styles.historyLabel}>{item.label}</Text>
-                                <Text style={styles.historyTime}>{item.time}</Text>
+                            <View style={styles.historyRight}>
+                                <Text style={styles.historyAmount}>+{item.amount}ml</Text>
+                                <TouchableOpacity onPress={() => deleteItem(item.id)}>
+                                    <MaterialIcons name="delete" size={20} color={SUBTEXT} />
+                                </TouchableOpacity>
                             </View>
                         </View>
-                        <View style={styles.historyRight}>
-                            <Text style={styles.historyAmount}>+{item.amount}ml</Text>
-                            <TouchableOpacity onPress={() => deleteItem(item.id, item.amount)}>
-                                <MaterialIcons name="delete" size={20} color={SUBTEXT} />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                ))}
+                    ))
+                )}
             </View>
             
             {/* Hydration Reminder Button (Moved here) */}
@@ -269,7 +385,7 @@ export default function LogWaterScreen() {
       
       {/* Sticky Bottom Save Button */}
       <View style={styles.stickyFooter}>
-          <TouchableOpacity style={styles.saveProgramButton} activeOpacity={0.9}>
+          <TouchableOpacity style={styles.saveProgramButton} activeOpacity={0.9} onPress={handleSaveProgram}>
               <MaterialCommunityIcons name="check-circle" size={24} color={BG_DARK} />
               <Text style={styles.saveProgramButtonText}>SAVE PROGRAM</Text>
           </TouchableOpacity>
@@ -425,13 +541,27 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
+  // Month Nav
+  monthNav: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 24,
+      marginTop: 16,
+      marginBottom: 8,
+  },
+  monthTitle: {
+      color: TEXT_COLOR,
+      fontSize: 16,
+      fontWeight: '600',
+  },
   // Calendar
   calendarContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 8,
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
@@ -440,6 +570,7 @@ const styles = StyleSheet.create({
   dayColumn: {
     alignItems: 'center',
     gap: 4,
+    paddingVertical: 4,
   },
   dayName: {
     fontSize: 10,
@@ -452,7 +583,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.3)',
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -465,6 +596,10 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
   },
+  todayCircle: {
+    borderColor: PRIMARY,
+    borderWidth: 1,
+  },
   dayNumber: {
     fontSize: 14,
     fontWeight: 'bold',
@@ -472,6 +607,17 @@ const styles = StyleSheet.create({
   },
   activeDayNumber: {
     color: BG_DARK,
+  },
+  // Goal Input
+  goalInput: {
+      color: TEXT_COLOR,
+      fontSize: 24,
+      fontWeight: '500',
+      borderBottomWidth: 1,
+      borderBottomColor: PRIMARY,
+      paddingVertical: 0,
+      textAlign: 'center',
+      minWidth: 60,
   },
   // Progress
   progressSection: {
