@@ -7,7 +7,7 @@ import { Pedometer } from 'expo-sensors';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Battery from 'expo-battery';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getStoredSteps, saveSteps, getLast7DaysSteps, getMonthSteps, formatDate, DailySteps, registerBackgroundFetchAsync, unregisterBackgroundFetchAsync } from '../utils/stepManager';
+import { getStoredSteps, saveSteps, getLast7DaysSteps, getAllHistory, getMonthSteps, formatDate, DailySteps, registerBackgroundFetchAsync, unregisterBackgroundFetchAsync } from '../utils/stepManager';
 
 const PRIMARY = "#ccff00";
 const BG_DARK = "#1f230f";
@@ -69,6 +69,7 @@ export default function AddStepsScreen() {
   const [currentSteps, setCurrentSteps] = useState(0);
   const [isPedometerAvailable, setIsPedometerAvailable] = useState('checking');
   const [pastDays, setPastDays] = useState<DailySteps[]>([]);
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarDays, setCalendarDays] = useState<any[]>([]);
   const subscription = useRef<Pedometer.Subscription | null>(null);
@@ -259,9 +260,18 @@ export default function AddStepsScreen() {
   };
 
   const loadHistory = async () => {
-    const days = await getLast7DaysSteps();
+    let days: DailySteps[] = [];
+    if (showAllHistory) {
+      days = await getAllHistory();
+    } else {
+      days = await getLast7DaysSteps();
+    }
     setPastDays(days);
   };
+
+  useEffect(() => {
+    loadHistory();
+  }, [showAllHistory]);
 
   const loadCalendarData = async () => {
     const year = currentMonth.getFullYear();
@@ -448,7 +458,15 @@ export default function AddStepsScreen() {
 
         {/* Recent Activity */}
         <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Last 7 Days | Son 7 gün</Text>
+            <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{showAllHistory ? "All Activity | Bütün Aktivlik" : "Last 7 Days | Son 7 gün"}</Text>
+                <TouchableOpacity 
+                    style={styles.expandButton}
+                    onPress={() => setShowAllHistory(!showAllHistory)}
+                >
+                    <Text style={{color: PRIMARY, fontWeight: 'bold'}}>{showAllHistory ? "Son 7 gün" : "Bütün Günlər"}</Text>
+                </TouchableOpacity>
+            </View>
             <View style={styles.recentList}>
                 {pastDays.map(({ date, steps: s, goal: g }, index) => {
                     const p = Math.min((s / g) * 100, 100);

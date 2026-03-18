@@ -4,6 +4,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 
 const STORAGE_KEY_PREFIX = 'steps_';
+const TRACKING_START_DATE_KEY = 'tracking_start_date';
 export const BACKGROUND_STEP_TASK = 'BACKGROUND_STEP_TASK';
 
 export interface DailySteps {
@@ -47,20 +48,91 @@ export const isPedometerAvailable = async (): Promise<boolean> => {
   return await Pedometer.isAvailableAsync();
 };
 
-// Get steps for the last 7 days
+// Initialize or get tracking start date
+export const getTrackingStartDate = async (): Promise<string> => {
+    try {
+        let start = await AsyncStorage.getItem(TRACKING_START_DATE_KEY);
+        if (!start) {
+            start = formatDate(new Date());
+            await AsyncStorage.setItem(TRACKING_START_DATE_KEY, start);
+        }
+        return start;
+    } catch (e) {
+        return formatDate(new Date());
+    }
+};
+
+// Get steps for the last 7 days (or from start date)
 export const getLast7DaysSteps = async (): Promise<DailySteps[]> => {
+  const startDateStr = await getTrackingStartDate();
+  const startDate = new Date(startDateStr);
+  const today = new Date();
+  
+  // Calculate the date 6 days ago
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 6);
+  
+  // The effective start date is the later of (trackingStartDate, sevenDaysAgo)
+  // We want to show a maximum of 7 days, but not before trackingStartDate
+  
+  // Normalize dates to remove time
+  startDate.setHours(0,0,0,0);
+  sevenDaysAgo.setHours(0,0,0,0);
+  today.setHours(0,0,0,0);
+  
+  const effectiveStart = startDate > sevenDaysAgo ? startDate : sevenDaysAgo;
+  
   const days: DailySteps[] = [];
-  for (let i = 0; i < 7; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const steps = await getStoredSteps(date);
-    days.push({
-      date: formatDate(date),
-      steps,
-      goal: 10000, // Default goal
-    });
+  
+  // Loop from effectiveStart to today
+  // We need to calculate how many days are in this range
+  const diffTime = Math.abs(today.getTime() - effectiveStart.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+  
+  // Iterate from 0 to diffDays
+  for (let i = 0; i <= diffDays; i++) {
+      const d = new Date(effectiveStart);
+      d.setDate(d.getDate() + i);
+      
+      // Safety check to not go beyond today (though logic should prevent it)
+      if (d > today) break;
+
+      const steps = await getStoredSteps(d);
+      days.push({
+          date: formatDate(d),
+          steps,
+          goal: 10000,
+      });
   }
-  return days;
+  
+  // Sort chronological (Oldest first) as per user description "18, 19"
+  return days.sort((a, b) => a.date.localeCompare(b.date));
+};
+
+// Get ALL recorded steps
+export const getAllHistory = async (): Promise<DailySteps[]> => {
+    try {
+        const keys = await AsyncStorage.getAllKeys();
+        const stepKeys = keys.filter(k => k.startsWith(STORAGE_KEY_PREFIX));
+        
+        const days: DailySteps[] = [];
+        for (const key of stepKeys) {
+            const dateStr = key.replace(STORAGE_KEY_PREFIX, '');
+            const stepsStr = await AsyncStorage.getItem(key);
+            const steps = stepsStr ? parseInt(stepsStr, 10) : 0;
+            days.push({
+                date: dateStr,
+                steps,
+                goal: 10000
+            });
+        }
+        
+        // Sort chronological
+        return days.sort((a, b) => a.date.localeCompare(b.date));
+    } catch (e) {
+        console.error("Error getting all history", e);
+        return [];
+    }
 };
 
 // Get steps for a specific month
