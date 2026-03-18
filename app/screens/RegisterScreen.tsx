@@ -27,6 +27,11 @@ export default function RegisterScreen() {
   const router = useRouter();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     GoogleSignin.configure({
@@ -59,6 +64,30 @@ export default function RegisterScreen() {
       Alert.alert('Google Sign-In Error', String(error));
     }
   }
+
+  const handleRegister = async () => {
+    if (!fullName || !email || !password || !confirmPassword) {
+      Alert.alert('Hata', 'Lütfen tüm alanları doldurun.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Hata', 'Şifreler eşleşmiyor.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const userCredential = await auth().createUserWithEmailAndPassword(email, password);
+      // Optional: Update user profile with full name
+      await userCredential.user.updateProfile({ displayName: fullName });
+      
+      router.replace('/screens/GoalSelectionScreen');
+    } catch (error: any) {
+      console.error(error);
+      Alert.alert('Kayıt Hatası', error.message || 'Kayıt olunamadı.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -98,6 +127,8 @@ export default function RegisterScreen() {
                 placeholder="Cavid Əliyev / John Doe"
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="words"
+                value={fullName}
+                onChangeText={setFullName}
               />
             </View>
 
@@ -110,6 +141,8 @@ export default function RegisterScreen() {
                 placeholderTextColor={colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
               />
             </View>
 
@@ -122,6 +155,8 @@ export default function RegisterScreen() {
                   placeholder="••••••••"
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry={!passwordVisible}
+                  value={password}
+                  onChangeText={setPassword}
                 />
                 <TouchableOpacity 
                   style={styles.eyeIcon} 
@@ -145,6 +180,8 @@ export default function RegisterScreen() {
                   placeholder="••••••••"
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry={!confirmPasswordVisible}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
                 />
                 <TouchableOpacity 
                   style={styles.eyeIcon} 
@@ -161,11 +198,12 @@ export default function RegisterScreen() {
 
             {/* Register Button */}
             <TouchableOpacity 
-              style={styles.registerButton} 
-              activeOpacity={1} 
-              disabled={true}
+              style={[styles.registerButton, loading && { opacity: 0.7 }]} 
+              activeOpacity={0.9} 
+              onPress={handleRegister}
+              disabled={loading}
             >
-              <Text style={styles.registerButtonText}>Sign Up</Text>
+              <Text style={styles.registerButtonText}>{loading ? 'Signing Up...' : 'Sign Up'}</Text>
             </TouchableOpacity>
 
           </View>

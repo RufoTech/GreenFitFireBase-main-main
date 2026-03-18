@@ -22,6 +22,9 @@ import GoogleIcon from '@/components/GoogleIcon';
 export default function LoginScreen() {
   const router = useRouter();
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     GoogleSignin.configure({
@@ -55,10 +58,22 @@ export default function LoginScreen() {
     }
   }
 
-  // Normal login fonksiyonu (şimdilik boş)
-  const handleNormalLogin = () => {
-    // router.replace('/screens/GoalSelectionScreen'); // Geçici olarak devre dışı
-    console.log("Normal login pressed");
+  // Normal login fonksiyonu
+  const handleNormalLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Hata', 'Lütfen e-posta ve şifrenizi girin.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await auth().signInWithEmailAndPassword(email, password);
+      router.replace('/screens/GoalSelectionScreen');
+    } catch (error: any) {
+      console.error(error);
+      Alert.alert('Giriş Hatası', error.message || 'Giriş yapılamadı.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -94,6 +109,8 @@ export default function LoginScreen() {
               placeholderTextColor={colors.textMuted}
               keyboardType="email-address"
               autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
             />
           </View>
 
@@ -106,6 +123,8 @@ export default function LoginScreen() {
                 placeholder="••••••••"
                 placeholderTextColor={colors.textMuted}
                 secureTextEntry={!passwordVisible}
+                value={password}
+                onChangeText={setPassword}
               />
               <TouchableOpacity 
                 style={styles.eyeIcon} 
@@ -130,11 +149,12 @@ export default function LoginScreen() {
 
           {/* Main Login Button */}
           <TouchableOpacity 
-            style={styles.loginButton} 
+            style={[styles.loginButton, loading && { opacity: 0.7 }]} 
             activeOpacity={0.9} 
-            onPress={handleNormalLogin} // Fonksiyon değiştirildi
+            onPress={handleNormalLogin}
+            disabled={loading}
           >
-            <Text style={styles.loginButtonText}>Login</Text>
+            <Text style={styles.loginButtonText}>{loading ? 'Logging in...' : 'Login'}</Text>
           </TouchableOpacity>
 
         </View>
