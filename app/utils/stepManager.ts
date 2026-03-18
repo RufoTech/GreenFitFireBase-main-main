@@ -1,7 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Pedometer } from 'expo-sensors';
+import * as TaskManager from 'expo-task-manager';
+import * as BackgroundFetch from 'expo-background-fetch';
 
 const STORAGE_KEY_PREFIX = 'steps_';
+export const BACKGROUND_STEP_TASK = 'BACKGROUND_STEP_TASK';
 
 export interface DailySteps {
   date: string; // YYYY-MM-DD
@@ -75,4 +78,56 @@ export const getMonthSteps = async (year: number, month: number): Promise<DailyS
     });
   }
   return days;
+};
+
+// Define Background Task
+TaskManager.defineTask(BACKGROUND_STEP_TASK, async () => {
+  try {
+    const isAvailable = await Pedometer.isAvailableAsync();
+    if (!isAvailable) {
+      return BackgroundFetch.BackgroundFetchResult.NoData;
+    }
+
+    // You can't actively watch in background via Pedometer without a foreground service in standard React Native.
+    // However, if the device hardware supports step counting natively, we can fetch steps for 'today'
+    // by asking Pedometer for steps between start of day and now.
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    
+    // Attempt to get historical steps for today
+    // Note: This requires specific permissions on iOS/Android to read historical data
+    const result = await Pedometer.getStepCountAsync(start, end);
+    
+    if (result && result.steps) {
+        const today = new Date();
+        const storedSteps = await getStoredSteps(today);
+        
+        // If background fetched steps are higher than what we have, update it.
+        // Or we can just overwrite it since it's the total from the device for today.
+        if (result.steps > storedSteps) {
+            await saveSteps(today, result.steps);
+            return BackgroundFetch.BackgroundFetchResult.NewData;
+        }
+    }
+
+    return BackgroundFetch.BackgroundFetchResult.NoData;
+  } catch (error) {
+    console.error("Background Fetch Error:", error);
+    return BackgroundFetch.BackgroundFetchResult.Failed;
+  }
+});
+
+// Register Background Task
+export const registerBackgroundFetchAsync = async () => {
+  return BackgroundFetch.registerTaskAsync(BACKGROUND_STEP_TASK, {
+    minimumInterval: 15 * 60, // 15 minutes
+    stopOnTerminate: false, // android only,
+    startOnBoot: true, // android only
+  });
+};
+
+// Unregister Background Task
+export const unregisterBackgroundFetchAsync = async () => {
+  return BackgroundFetch.unregisterTaskAsync(BACKGROUND_STEP_TASK);
 };

@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Platform, StatusBar, Dimensions, AppState, AppStateStatus } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Platform, StatusBar, Dimensions, AppState, AppStateStatus, Alert } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Pedometer } from 'expo-sensors';
-import { getStoredSteps, saveSteps, getLast7DaysSteps, getMonthSteps, formatDate, DailySteps } from '../utils/stepManager';
+import * as IntentLauncher from 'expo-intent-launcher';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getStoredSteps, saveSteps, getLast7DaysSteps, getMonthSteps, formatDate, DailySteps, registerBackgroundFetchAsync, unregisterBackgroundFetchAsync } from '../utils/stepManager';
 
 const PRIMARY = "#ccff00";
 const BG_DARK = "#1f230f";
@@ -74,6 +76,35 @@ export default function AddStepsScreen() {
   // Load initial data
   useEffect(() => {
     const init = async () => {
+      // 1. Önce İzin Kontrolü Yap
+      if (Platform.OS === 'android') {
+        const { status } = await Pedometer.requestPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            "İcazə Lazımdır",
+            "Addım sayarın işləməsi üçün fiziki aktivlik icazəsi verməlisiniz.",
+            [
+              { 
+                text: "Geri qayıt", 
+                onPress: () => router.back(),
+                style: "cancel"
+              },
+              { 
+                text: "Ayarlara get", 
+                onPress: () => {
+                  IntentLauncher.startActivityAsync(
+                    IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS,
+                    { data: 'package:com.radevolopment.greenfit' }
+                  );
+                  router.back();
+                } 
+              }
+            ]
+          );
+          return; // İzin yoksa diğer işlemleri yapma
+        }
+      }
+
       const available = await Pedometer.isAvailableAsync();
       setIsPedometerAvailable(String(available));
 
@@ -85,10 +116,16 @@ export default function AddStepsScreen() {
         
         // Start tracking
         subscribe();
+        
+        // Setup background fetch
+        await registerBackgroundFetchAsync();
       }
 
       // Load history
       loadHistory();
+      
+      // Check battery optimization settings
+      checkBatteryOptimization();
     };
 
     init();
@@ -100,6 +137,42 @@ export default function AddStepsScreen() {
       subscription.remove();
     };
   }, []);
+
+  const checkBatteryOptimization = async () => {
+      if (Platform.OS === 'android') {
+          // In a real app, you might want to use a specific package like `react-native-battery-optimization-check`
+          // or `expo-battery` to check the actual status.
+          // Since we can't reliably check the exact status in standard Expo without native modules,
+          // we show a friendly alert to the user on the first few visits or if steps aren't updating.
+          
+          // For demonstration, we just show it once using AsyncStorage
+          const hasSeenAlert = await AsyncStorage.getItem('has_seen_battery_alert');
+          if (!hasSeenAlert) {
+              Alert.alert(
+                  "Arxa Plan İcazəsi",
+                  "Addım sayarın proqram bağlı olanda da işləməsi üçün zəhmət olmasa ayarlardan bu proqram üçün 'Pil Təsarüfü'nü (Battery Optimization) söndürün.",
+                  [
+                      { text: "Ləğv et", style: "cancel" },
+                      { 
+                          text: "Ayarlara get", 
+                          onPress: () => {
+                              IntentLauncher.startActivityAsync(
+                                  IntentLauncher.ActivityAction.IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+                              ).catch(() => {
+                                  // Fallback to app settings
+                                  IntentLauncher.startActivityAsync(
+                                      IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS,
+                                      { data: 'package:com.radevolopment.greenfit' }
+                                  );
+                              });
+                          } 
+                      }
+                  ]
+              );
+              await AsyncStorage.setItem('has_seen_battery_alert', 'true');
+          }
+      }
+  };
 
   // Effect to update calendar when month changes or steps update
   useEffect(() => {
@@ -120,20 +193,29 @@ export default function AddStepsScreen() {
     if (isAvailable) {
       if (subscription.current) return;
       
-      // Get the initial count for today from storage again to be sure
       const today = new Date();
-      let startSteps = await getStoredSteps(today);
-      
-      // Since watchStepCount returns steps since subscription, 
-      // we just add the delta to our state and save.
-      // However, a simpler way is to trust the pedometer's cumulative count for the session
-      // and add it to the stored 'base' count.
-      // But if the app is killed, the session resets.
-      // So we will just add the *new* steps to the stored value.
-      
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      // 1. Önce bugünün donanım geçmişini (toplam adım) çekmeyi dene
+      try {
+          const pastSteps = await Pedometer.getStepCountAsync(startOfDay, today);
+          if (pastSteps && pastSteps.steps > 0) {
+              const stored = await getStoredSteps(today);
+              // Cihazın saydığı adım, bizim kaydettiğimizden fazlaysa güncelle
+              if (pastSteps.steps > stored) {
+                  setCurrentSteps(pastSteps.steps);
+                  await saveSteps(today, pastSteps.steps);
+              }
+          }
+      } catch (e) {
+          console.log("Geçmiş adımlar alınamadı", e);
+      }
+
       let previousStepCount: number | null = null;
       let lastDateString = formatDate(new Date());
 
+      // Use a slightly different approach: just trust the delta from the pedometer
       subscription.current = Pedometer.watchStepCount(result => {
         const now = new Date();
         const currentDateString = formatDate(now);
@@ -151,10 +233,6 @@ export default function AddStepsScreen() {
             setCurrentSteps(prev => {
                 // Check for day change
                 if (currentDateString !== lastDateString) {
-                    // New day! 
-                    // Save the 'prev' steps to the old date (already done by previous updates)
-                    // But we should ensure the *new* steps go to the new date.
-                    // Reset 'prev' to 0 conceptually for the new day.
                     lastDateString = currentDateString;
                     const newTotal = delta;
                     saveSteps(now, newTotal);
