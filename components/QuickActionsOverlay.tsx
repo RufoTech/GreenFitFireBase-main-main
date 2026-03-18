@@ -153,13 +153,6 @@ export default function QuickActionsOverlay({ visible, onClose }: QuickActionsOv
               onPress={() => handleActionPress('/screens/LogWaterScreen')}
           />
           <QuickActionButton 
-              title="Sleep Alarm" 
-              subtitle="" 
-              IconComponent={Feather} 
-              iconName="moon" 
-              onPress={() => handleActionPress('/screens/SleepAlarmScreen')}
-          />
-          <QuickActionButton 
               title="Add Meal" 
               subtitle="" 
               IconComponent={MaterialIcons} 

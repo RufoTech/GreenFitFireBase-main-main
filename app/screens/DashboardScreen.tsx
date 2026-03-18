@@ -275,16 +275,6 @@ export default function DashboardScreen() {
 
             <TouchableOpacity 
               style={styles.actionButton}
-              onPress={() => router.push('/screens/SleepAlarmScreen')}
-            >
-              <View style={[styles.actionIconContainer, { backgroundColor: isDark ? '#1e293b' : '#e2e8f0' }]}>
-                <Feather name="moon" size={24} color={currentTheme.text} />
-              </View>
-              <Text style={[styles.actionText, { color: currentTheme.text }]}>Sleep Alarm</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.actionButton}
               onPress={() => router.push('/screens/AddMealScreen')}
             >
               <View style={[styles.actionIconContainer, { backgroundColor: isDark ? '#1e293b' : '#e2e8f0' }]}>
