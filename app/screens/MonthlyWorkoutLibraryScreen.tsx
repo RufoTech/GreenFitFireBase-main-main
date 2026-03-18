@@ -391,12 +391,16 @@ export default function MonthlyWorkoutLibraryScreen() {
                             </View>
                           </View>
                           
-                          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: -35 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: -35 }}>
                              <TouchableOpacity 
-                              style={styles.addButton}
+                              style={activeProgram === program.id ? styles.continueButton : styles.addButton}
                               onPress={() => handleProgramPress(program)}
                             >
-                              <MaterialIcons name="play-arrow" size={24} color="#1f230f" />
+                              {activeProgram === program.id ? (
+                                <Text style={styles.continueButtonText}>Continue</Text>
+                              ) : (
+                                <MaterialIcons name="play-arrow" size={24} color="#1f230f" />
+                              )}
                             </TouchableOpacity>
                           </View>
                         </TouchableOpacity>
@@ -446,10 +450,14 @@ export default function MonthlyWorkoutLibraryScreen() {
                         </View>
                       </View>
                       <TouchableOpacity 
-                        style={styles.addButton}
+                        style={activeProgram === program.id ? styles.continueButton : styles.addButton}
                         onPress={() => handleProgramPress(program)}
                       >
-                        <MaterialIcons name="play-arrow" size={24} color="#1f230f" />
+                        {activeProgram === program.id ? (
+                          <Text style={styles.continueButtonText}>Continue</Text>
+                        ) : (
+                          <MaterialIcons name="play-arrow" size={24} color="#1f230f" />
+                        )}
                       </TouchableOpacity>
                     </View>
                   </TouchableOpacity>
@@ -797,6 +805,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#ccff00',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  continueButton: {
+    paddingHorizontal: 16,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ccff00',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  continueButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1f230f',
   },
   noImageCard: {
     marginBottom: 16,
