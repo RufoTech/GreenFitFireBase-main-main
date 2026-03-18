@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Platform, StatusBar, Dimensions, AppState, AppStateStatus, Alert } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Pedometer } from 'expo-sensors';
 import * as IntentLauncher from 'expo-intent-launcher';
+import * as Battery from 'expo-battery';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getStoredSteps, saveSteps, getLast7DaysSteps, getMonthSteps, formatDate, DailySteps, registerBackgroundFetchAsync, unregisterBackgroundFetchAsync } from '../utils/stepManager';
 
@@ -123,9 +124,6 @@ export default function AddStepsScreen() {
 
       // Load history
       loadHistory();
-      
-      // Check battery optimization settings
-      checkBatteryOptimization();
     };
 
     init();
@@ -140,19 +138,19 @@ export default function AddStepsScreen() {
 
   const checkBatteryOptimization = async () => {
       if (Platform.OS === 'android') {
-          // In a real app, you might want to use a specific package like `react-native-battery-optimization-check`
-          // or `expo-battery` to check the actual status.
-          // Since we can't reliably check the exact status in standard Expo without native modules,
-          // we show a friendly alert to the user on the first few visits or if steps aren't updating.
+          // expo-battery kullanarak cihazın pil tasarrufu modunda olup olmadığını kontrol ediyoruz
+          const isBatteryOptimizationEnabled = await Battery.isLowPowerModeEnabledAsync();
           
-          // For demonstration, we just show it once using AsyncStorage
-          const hasSeenAlert = await AsyncStorage.getItem('has_seen_battery_alert');
-          if (!hasSeenAlert) {
+          if (isBatteryOptimizationEnabled) {
               Alert.alert(
-                  "Arxa Plan İcazəsi",
-                  "Addım sayarın proqram bağlı olanda da işləməsi üçün zəhmət olmasa ayarlardan bu proqram üçün 'Pil Təsarüfü'nü (Battery Optimization) söndürün.",
+                  "Pil Təsarüfü Açıqdır!",
+                  "Addım sayarın arxa planda düzgün işləməsi üçün telefonun ayarlarından 'Pil Təsarüfü'nü (Battery Saver / Low Power Mode) söndürməlisiniz. Əks halda addımlarınız sayılmayacaq.",
                   [
-                      { text: "Ləğv et", style: "cancel" },
+                      { 
+                          text: "Geri qayıt", 
+                          onPress: () => router.back(),
+                          style: "cancel"
+                      },
                       { 
                           text: "Ayarlara get", 
                           onPress: () => {
@@ -165,14 +163,21 @@ export default function AddStepsScreen() {
                                       { data: 'package:com.radevolopment.greenfit' }
                                   );
                               });
+                              router.back();
                           } 
                       }
-                  ]
+                  ],
+                  { cancelable: false }
               );
-              await AsyncStorage.setItem('has_seen_battery_alert', 'true');
           }
       }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      checkBatteryOptimization();
+    }, [])
+  );
 
   // Effect to update calendar when month changes or steps update
   useEffect(() => {

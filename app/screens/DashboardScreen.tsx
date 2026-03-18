@@ -2,6 +2,8 @@ import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-ico
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import * as Battery from 'expo-battery';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -55,6 +57,37 @@ export default function DashboardScreen() {
   
   const [activeProgram, setActiveProgram] = useState<any>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+
+  const handleAddStepsPress = async () => {
+    if (Platform.OS === 'android') {
+        const isBatteryOptimizationEnabled = await Battery.isLowPowerModeEnabledAsync();
+        if (isBatteryOptimizationEnabled) {
+            Alert.alert(
+                "Pil Təsarüfü Açıqdır!",
+                "Addım sayarın arxa planda düzgün işləməsi üçün telefonun ayarlarından 'Pil Təsarüfü'nü (Battery Saver / Low Power Mode) söndürməlisiniz.",
+                [
+                    { text: "Ləğv et", style: "cancel" },
+                    { 
+                        text: "Ayarlara get", 
+                        onPress: () => {
+                            IntentLauncher.startActivityAsync(
+                                IntentLauncher.ActivityAction.IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+                            ).catch(() => {
+                                IntentLauncher.startActivityAsync(
+                                    IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS,
+                                    { data: 'package:com.radevolopment.greenfit' }
+                                );
+                            });
+                        } 
+                    }
+                ],
+                { cancelable: false }
+            );
+            return; // prevent navigation
+        }
+    }
+    router.push('/screens/AddStepsScreen');
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -226,7 +259,7 @@ export default function DashboardScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionsContainer}>
             <TouchableOpacity 
               style={styles.actionButton}
-              onPress={() => router.push('/screens/AddStepsScreen')}
+              onPress={handleAddStepsPress}
             >
               <View style={[styles.actionIconContainer, { backgroundColor: isDark ? '#1e293b' : '#e2e8f0' }]}>
                 <MaterialCommunityIcons name="shoe-print" size={24} color={currentTheme.text} />
