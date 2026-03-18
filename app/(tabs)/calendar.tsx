@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, Platform, StatusBar, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, StatusBar, Dimensions } from 'react-native';
 import { MaterialIcons, FontAwesome6 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
@@ -113,22 +113,10 @@ const CalendarScreen = () => {
           </View>
         </View>
 
-        {/* Consistency Stats */}
-        <View style={styles.statsCard}>
-          <View>
-            <Text style={styles.statsLabel}>Monthly Consistency</Text>
-            <Text style={styles.statsValue}>85%</Text>
-          </View>
-          <View style={styles.statsBadge}>
-            <MaterialIcons name="trending-up" size={16} color={PRIMARY} />
-            <Text style={styles.statsBadgeText}>+5.2%</Text>
-          </View>
-        </View>
-
         {/* Daily Schedule Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's Schedule</Text>
+            <Text style={styles.sectionTitle}>{"Today's Schedule"}</Text>
             <Text style={styles.dateLabel}>June 5, 2024</Text>
           </View>
 
@@ -196,18 +184,6 @@ const CalendarScreen = () => {
               </View>
             </View>
 
-            {/* Calories */}
-            <View style={styles.activityCard}>
-              <View style={styles.activityHeader}>
-                <MaterialIcons name="local-fire-department" size={20} color={PRIMARY} />
-                <Text style={styles.activityLabel}>CALORIES</Text>
-              </View>
-              <View>
-                <Text style={styles.activityValue}>450 kcal</Text>
-                <Text style={styles.activitySubtext}>Active burn today</Text>
-              </View>
-            </View>
-
             {/* Hydration */}
             <View style={styles.activityCard}>
               <View style={styles.activityHeader}>
@@ -220,18 +196,6 @@ const CalendarScreen = () => {
               </View>
               <View style={styles.progressBarBg}>
                 <View style={[styles.progressBarFill, { width: '48%' }]} />
-              </View>
-            </View>
-
-            {/* Sleep */}
-            <View style={styles.activityCard}>
-              <View style={styles.activityHeader}>
-                <MaterialIcons name="bedtime" size={20} color={PRIMARY} />
-                <Text style={styles.activityLabel}>SLEEP</Text>
-              </View>
-              <View>
-                <Text style={styles.activityValue}>7h 20m</Text>
-                <Text style={styles.activitySubtext}>Last night</Text>
               </View>
             </View>
           </View>
