@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Platform, StatusBar, TextInput, ScrollView, Dimensions, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Platform, StatusBar, TextInput, ScrollView, Dimensions, Alert, Modal } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
@@ -10,7 +10,7 @@ const CARD_BG = "rgba(255, 255, 255, 0.05)";
 const TEXT_COLOR = "#f1f5f9";
 const SUBTEXT = "#94a3b8";
 const GOAL = 2500;
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const initialHistory = [
   { id: 1, label: "Glass of water", time: "08:30 AM", amount: 250, icon: "water-outline" },
@@ -23,6 +23,7 @@ export default function LogWaterScreen() {
   const [customAmount, setCustomAmount] = useState("");
   const [history, setHistory] = useState(initialHistory);
   const [weekDays, setWeekDays] = useState<any[]>([]);
+  const [reminderVisible, setReminderVisible] = useState(false);
   const router = useRouter();
 
   // Calculate percentage for ring
@@ -250,17 +251,134 @@ export default function LogWaterScreen() {
                     </View>
                 ))}
             </View>
-        </View>
-
-        {/* Hydration Reminder Button */}
-        <View style={styles.footerSection}>
-             <TouchableOpacity style={styles.reminderButton} activeOpacity={0.9}>
+            
+            {/* Hydration Reminder Button (Moved here) */}
+             <TouchableOpacity 
+                style={[styles.reminderButton, { marginTop: 16 }]} 
+                activeOpacity={0.9}
+                onPress={() => setReminderVisible(true)}
+             >
                   <MaterialIcons name="notifications-active" size={20} color={BG_DARK} />
                   <Text style={styles.reminderButtonText}>SAVE HYDRATION REMINDER</Text>
               </TouchableOpacity>
         </View>
+        
+        <View style={{ height: 100 }} />
 
       </ScrollView>
+      
+      {/* Sticky Bottom Save Button */}
+      <View style={styles.stickyFooter}>
+          <TouchableOpacity style={styles.saveProgramButton} activeOpacity={0.9}>
+              <MaterialCommunityIcons name="check-circle" size={24} color={BG_DARK} />
+              <Text style={styles.saveProgramButtonText}>SAVE PROGRAM</Text>
+          </TouchableOpacity>
+      </View>
+
+      {/* Reminder Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={reminderVisible}
+        onRequestClose={() => setReminderVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+            <TouchableOpacity 
+                style={styles.modalBackdrop} 
+                activeOpacity={1} 
+                onPress={() => setReminderVisible(false)}
+            />
+            <View style={styles.modalContent}>
+                <View style={styles.modalHandle} />
+                
+                <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Set Hydration Reminder</Text>
+                    <Text style={styles.modalSubtitle}>Stay consistent with your water intake</Text>
+                </View>
+
+                <View style={styles.timeSection}>
+                    {/* Start Time */}
+                    <View style={styles.timeRow}>
+                        <View style={styles.timeLabelContainer}>
+                            <MaterialIcons name="schedule" size={16} color={TEXT_COLOR} />
+                            <Text style={styles.timeLabel}>Start Time</Text>
+                        </View>
+                        <View style={styles.timePicker}>
+                            <View style={styles.timeColumn}>
+                                <Text style={styles.timeTextSmall}>07</Text>
+                                <View style={styles.timeSelected}>
+                                    <Text style={styles.timeTextSelected}>08</Text>
+                                </View>
+                                <Text style={styles.timeTextSmall}>09</Text>
+                            </View>
+                            <Text style={styles.timeSeparator}>:</Text>
+                            <View style={styles.timeColumn}>
+                                <Text style={styles.timeTextSmall}>45</Text>
+                                <View style={styles.timeSelected}>
+                                    <Text style={styles.timeTextSelected}>00</Text>
+                                </View>
+                                <Text style={styles.timeTextSmall}>15</Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* End Time */}
+                    <View style={styles.timeRow}>
+                        <View style={styles.timeLabelContainer}>
+                            <MaterialIcons name="bedtime" size={16} color={TEXT_COLOR} />
+                            <Text style={styles.timeLabel}>End Time</Text>
+                        </View>
+                        <View style={styles.timePicker}>
+                            <View style={styles.timeColumn}>
+                                <Text style={styles.timeTextSmall}>21</Text>
+                                <View style={styles.timeSelected}>
+                                    <Text style={styles.timeTextSelected}>22</Text>
+                                </View>
+                                <Text style={styles.timeTextSmall}>23</Text>
+                            </View>
+                            <Text style={styles.timeSeparator}>:</Text>
+                            <View style={styles.timeColumn}>
+                                <Text style={styles.timeTextSmall}>15</Text>
+                                <View style={styles.timeSelected}>
+                                    <Text style={styles.timeTextSelected}>30</Text>
+                                </View>
+                                <Text style={styles.timeTextSmall}>45</Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* Frequency */}
+                    <View style={styles.freqSection}>
+                        <View style={styles.timeLabelContainer}>
+                            <MaterialIcons name="notifications-active" size={16} color={TEXT_COLOR} />
+                            <Text style={styles.timeLabel}>Frequency</Text>
+                        </View>
+                        <View style={styles.freqGrid}>
+                            <TouchableOpacity style={styles.freqButton}>
+                                <Text style={styles.freqButtonText}>Every 30m</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.freqButtonActive}>
+                                <Text style={styles.freqButtonTextActive}>Every 1h</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.freqButton}>
+                                <Text style={styles.freqButtonText}>Every 2h</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+
+                <TouchableOpacity 
+                    style={styles.modalSaveButton} 
+                    onPress={() => {
+                        setReminderVisible(false);
+                        Alert.alert("Success", "Hydration reminder set successfully!");
+                    }}
+                >
+                    <Text style={styles.modalSaveButtonText}>Save</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -581,5 +699,190 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 14,
     letterSpacing: 0.5,
+  },
+  stickyFooter: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      padding: 16,
+      backgroundColor: 'rgba(18, 20, 10, 0.95)',
+      borderTopWidth: 1,
+      borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  saveProgramButton: {
+      width: '100%',
+      paddingVertical: 18,
+      backgroundColor: PRIMARY,
+      borderRadius: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+      shadowColor: PRIMARY,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 10,
+      elevation: 8,
+  },
+  saveProgramButtonText: {
+      color: BG_DARK,
+      fontWeight: '900',
+      fontSize: 16,
+      letterSpacing: 1,
+  },
+  // Modal
+  modalOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+      backgroundColor: BG_DARK,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingHorizontal: 24,
+      paddingBottom: 40,
+      paddingTop: 12,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+      maxHeight: height * 0.8,
+  },
+  modalHandle: {
+      width: 48,
+      height: 6,
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      borderRadius: 3,
+      alignSelf: 'center',
+      marginBottom: 24,
+  },
+  modalHeader: {
+      alignItems: 'center',
+      marginBottom: 32,
+  },
+  modalTitle: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: TEXT_COLOR,
+      marginBottom: 4,
+  },
+  modalSubtitle: {
+      fontSize: 14,
+      color: SUBTEXT,
+  },
+  timeSection: {
+      gap: 24,
+      marginBottom: 40,
+  },
+  timeRow: {
+      gap: 12,
+  },
+  timeLabelContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 12,
+  },
+  timeLabel: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: TEXT_COLOR,
+  },
+  timePicker: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+  },
+  timeColumn: {
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+      alignItems: 'center',
+      width: 60,
+      overflow: 'hidden',
+  },
+  timeTextSmall: {
+      fontSize: 14,
+      color: SUBTEXT,
+      paddingVertical: 10,
+  },
+  timeSelected: {
+      backgroundColor: 'rgba(204, 255, 0, 0.2)',
+      width: '100%',
+      alignItems: 'center',
+      paddingVertical: 12,
+  },
+  timeTextSelected: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: PRIMARY,
+  },
+  timeSeparator: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: SUBTEXT,
+  },
+  freqSection: {
+      gap: 12,
+  },
+  freqGrid: {
+      flexDirection: 'row',
+      gap: 12,
+  },
+  freqButton: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+      alignItems: 'center',
+  },
+  freqButtonText: {
+      color: TEXT_COLOR,
+      fontSize: 12,
+      fontWeight: '500',
+  },
+  freqButtonActive: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      borderRadius: 8,
+      borderWidth: 2,
+      borderColor: PRIMARY,
+      backgroundColor: 'rgba(204, 255, 0, 0.1)',
+      alignItems: 'center',
+      shadowColor: PRIMARY,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.2,
+      shadowRadius: 15,
+      elevation: 5,
+  },
+  freqButtonTextActive: {
+      color: PRIMARY,
+      fontSize: 12,
+      fontWeight: '700',
+  },
+  modalSaveButton: {
+      width: '100%',
+      paddingVertical: 16,
+      backgroundColor: PRIMARY,
+      borderRadius: 12,
+      alignItems: 'center',
+      shadowColor: PRIMARY,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 10,
+      elevation: 5,
+  },
+  modalSaveButtonText: {
+      color: BG_DARK,
+      fontWeight: '700',
+      fontSize: 16,
   },
 });
