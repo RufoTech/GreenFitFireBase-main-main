@@ -301,24 +301,30 @@ export default function LogWaterScreen() {
                         <Text style={styles.separatorText}>/</Text>
                         
                         {isGoalEditing ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 8, paddingHorizontal: 8 }}>
                                 <TextInput 
                                     value={tempGoal}
                                     onChangeText={setTempGoal}
-                                    style={styles.goalInput}
+                                    style={[styles.goalInput, { minWidth: 50, textAlign: 'center' }]}
                                     keyboardType="numeric"
                                     autoFocus
                                     onBlur={handleGoalUpdate}
                                     onSubmitEditing={handleGoalUpdate}
+                                    selectionColor={PRIMARY}
                                 />
-                                <Text style={styles.goalText}>ml</Text>
+                                <Text style={[styles.goalText, { fontSize: 16, marginLeft: 2 }]}>ml</Text>
                             </View>
                         ) : (
-                            <TouchableOpacity onPress={() => {
-                                setTempGoal(goal.toString());
-                                setIsGoalEditing(true);
-                            }}>
+                            <TouchableOpacity 
+                                onPress={() => {
+                                    setTempGoal(goal.toString());
+                                    setIsGoalEditing(true);
+                                }}
+                                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(204,255,0,0.3)' }}
+                                activeOpacity={0.7}
+                            >
                                 <Text style={styles.goalText}>{(goal / 1000).toFixed(1)}L</Text>
+                                <MaterialIcons name="edit" size={14} color={PRIMARY} style={{ marginLeft: 4 }} />
                             </TouchableOpacity>
                         )}
                     </View>
@@ -328,7 +334,7 @@ export default function LogWaterScreen() {
 
             <View style={styles.dailyGoalContainer}>
                 <Text style={styles.dailyGoalTitle}>Daily Goal</Text>
-                <Text style={styles.dailyGoalSubtitle}>Tap value to edit goal</Text>
+                <Text style={styles.dailyGoalSubtitle}>Tap the value above to edit</Text>
             </View>
         </View>
 
@@ -681,12 +687,9 @@ const styles = StyleSheet.create({
   goalInput: {
       color: TEXT_COLOR,
       fontSize: 24,
-      fontWeight: '500',
-      borderBottomWidth: 1,
-      borderBottomColor: PRIMARY,
-      paddingVertical: 0,
-      textAlign: 'center',
-      minWidth: 60,
+      fontWeight: 'bold',
+      padding: 0,
+      margin: 0,
   },
   // Progress
   progressSection: {

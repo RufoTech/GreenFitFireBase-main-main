@@ -1,8 +1,6 @@
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import { BatteryOptEnabled, RequestDisableOptimization } from 'react-native-battery-optimization-check';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -21,6 +19,9 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { BatteryOptEnabled, RequestDisableOptimization } from 'react-native-battery-optimization-check';
+import { getStoredSteps } from '../utils/stepManager';
+import { getWaterLogs } from '../utils/waterManager';
 
 const { width } = Dimensions.get('window');
 
@@ -54,8 +55,53 @@ export default function DashboardScreen() {
   const currentTheme = isDark ? theme.dark : theme.light;
   const user = auth().currentUser;
   
+  const [waterData, setWaterData] = useState<{ today: number; yesterday: number }>({ today: 0, yesterday: 0 });
+  const [stepsData, setStepsData] = useState<{ today: number; yesterday: number }>({ today: 0, yesterday: 0 });
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadActivityData = async () => {
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(today.getDate() - 1);
+
+        // Water
+        const waterToday = await getWaterLogs(today);
+        const waterYesterday = await getWaterLogs(yesterday);
+        setWaterData({
+          today: waterToday.totalConsumed,
+          yesterday: waterYesterday.totalConsumed
+        });
+
+        // Steps
+        const stepsToday = await getStoredSteps(today);
+        const stepsYesterday = await getStoredSteps(yesterday);
+        setStepsData({
+          today: stepsToday,
+          yesterday: stepsYesterday
+        });
+      };
+
+      loadActivityData();
+    }, [])
+  );
+
   const [activeProgram, setActiveProgram] = useState<any>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+
+  const handleRemoveProgram = async () => {
+    if (!user) return;
+    
+    try {
+      await firestore().collection('users').doc(user.uid).update({
+        activeProgramId: firestore.FieldValue.delete()
+      });
+      setDeleteModalVisible(false);
+    } catch (error) {
+      console.error("Error removing program:", error);
+      Alert.alert("Error", "Could not remove the program. Please try again.");
+    }
+  };
 
   const handleAddStepsPress = async () => {
     if (Platform.OS === 'android') {
@@ -156,26 +202,25 @@ export default function DashboardScreen() {
     }, [user])
   );
 
-  // GoogleSignin'i yapılandır
-  useEffect(() => {
-    GoogleSignin.configure({
-      webClientId: '802032521156-plrtru1qe837u5cr60nl2p5jtsik201b.apps.googleusercontent.com',
-    });
-  }, []);
 
-  const handleRemoveProgram = async () => {
-    if (!user) return;
+
+  // Helper to calculate trend
+  const getTrend = (current: number, previous: number, unit: string = '') => {
+    if (previous === 0) return { text: current > 0 ? `+${current}${unit}` : '0', color: current > 0 ? '#22c55e' : '#94a3b8', icon: current > 0 ? 'trending-up' : 'remove' };
     
-    try {
-      await firestore().collection('users').doc(user.uid).update({
-        activeProgramId: firestore.FieldValue.delete()
-      });
-      setDeleteModalVisible(false);
-    } catch (error) {
-      console.error("Error removing program:", error);
-      Alert.alert("Error", "Could not remove the program. Please try again.");
-    }
+    const diff = current - previous;
+    const percentage = Math.round((diff / previous) * 100);
+    const isPositive = diff >= 0;
+    
+    return {
+      text: `${isPositive ? '+' : ''}${percentage}%`,
+      color: isPositive ? '#22c55e' : '#f87171',
+      icon: isPositive ? 'trending-up' : 'trending-down'
+    };
   };
+
+  const waterTrend = getTrend(waterData.today, waterData.yesterday);
+  const stepsTrend = getTrend(stepsData.today, stepsData.yesterday);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: currentTheme.bg }]}>
@@ -217,10 +262,10 @@ export default function DashboardScreen() {
               <MaterialIcons name="water-drop" size={20} color="#3b82f6" />
               <Text style={[styles.summaryTitle, { color: currentTheme.subtext }]}>Water Intake</Text>
             </View>
-            <Text style={[styles.summaryValue, { color: currentTheme.text }]}>1.2 L</Text>
+            <Text style={[styles.summaryValue, { color: currentTheme.text }]}>{(waterData.today / 1000).toFixed(1)} L</Text>
             <View style={styles.trendContainer}>
-              <MaterialIcons name="trending-up" size={16} color="#3b82f6" />
-              <Text style={[styles.trendText, { color: '#3b82f6' }]}>+0.2 L</Text>
+              <MaterialIcons name={waterTrend.icon as any} size={16} color={waterTrend.color} />
+              <Text style={[styles.trendText, { color: waterTrend.color }]}>{waterTrend.text}</Text>
             </View>
           </View>
 
@@ -229,22 +274,10 @@ export default function DashboardScreen() {
               <MaterialCommunityIcons name="shoe-print" size={20} color={isDark ? '#22c55e' : '#15803d'} />
               <Text style={[styles.summaryTitle, { color: currentTheme.subtext }]}>Daily Steps</Text>
             </View>
-            <Text style={[styles.summaryValue, { color: currentTheme.text }]}>8,432</Text>
+            <Text style={[styles.summaryValue, { color: currentTheme.text }]}>{stepsData.today.toLocaleString()}</Text>
             <View style={styles.trendContainer}>
-              <MaterialIcons name="trending-up" size={16} color="#22c55e" />
-              <Text style={[styles.trendText, { color: '#22c55e' }]}>+15%</Text>
-            </View>
-          </View>
-
-          <View style={[styles.summaryCard, { backgroundColor: isDark ? currentTheme.cardBg : '#ffffff', borderColor: isDark ? currentTheme.cardBorder : '#e2e8f0' }]}>
-            <View style={styles.summaryHeader}>
-              <MaterialIcons name="fitness-center" size={20} color={currentTheme.subtext} />
-              <Text style={[styles.summaryTitle, { color: currentTheme.subtext }]}>Calories Burned</Text>
-            </View>
-            <Text style={[styles.summaryValue, { color: currentTheme.text }]}>450 kcal</Text>
-            <View style={styles.trendContainer}>
-              <MaterialIcons name="trending-down" size={16} color="#f87171" />
-              <Text style={[styles.trendText, { color: '#f87171' }]}>-5%</Text>
+              <MaterialIcons name={stepsTrend.icon as any} size={16} color={stepsTrend.color} />
+              <Text style={[styles.trendText, { color: stepsTrend.color }]}>{stepsTrend.text}</Text>
             </View>
           </View>
         </ScrollView>
