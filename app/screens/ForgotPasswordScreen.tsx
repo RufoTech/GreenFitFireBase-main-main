@@ -1,6 +1,7 @@
 import { colors } from '@/constants/theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import auth from '@react-native-firebase/auth';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -20,15 +21,31 @@ import {
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSendResetLink = () => {
+  const handleSendResetLink = async () => {
     if (!email) {
       Alert.alert('Error', 'Please enter your email address');
       return;
     }
-    // Implement password reset logic here
-    Alert.alert('Success', 'Password reset link sent to your email');
-    router.back();
+    setLoading(true);
+    try {
+      await auth().sendPasswordResetEmail(email);
+      Alert.alert('Success', 'Password reset link sent to your email', [
+        { text: 'OK', onPress: () => router.back() }
+      ]);
+    } catch (error: any) {
+      console.error(error);
+      let errorMessage = 'Failed to send reset link. Please try again.';
+      if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address format.';
+      } else if (error.code === 'auth/user-not-found') {
+        errorMessage = 'No user found with this email.';
+      }
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -96,12 +113,13 @@ export default function ForgotPasswordScreen() {
 
               {/* Submit Button */}
               <TouchableOpacity 
-                style={styles.submitButton}
+                style={[styles.submitButton, loading && { opacity: 0.7 }]}
                 activeOpacity={0.9}
                 onPress={handleSendResetLink}
+                disabled={loading}
               >
-                <Text style={styles.submitButtonText}>Send Reset Link</Text>
-                <MaterialIcons name="send" size={20} color={colors.backgroundDark} />
+                <Text style={styles.submitButtonText}>{loading ? 'Sending...' : 'Send Reset Link'}</Text>
+                {!loading && <MaterialIcons name="send" size={20} color={colors.backgroundDark} />}
               </TouchableOpacity>
             </View>
 
