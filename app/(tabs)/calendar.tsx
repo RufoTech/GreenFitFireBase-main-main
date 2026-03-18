@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, StatusBar, Dimensions } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, StatusBar, ActivityIndicator, Platform } from 'react-native';
 import { MaterialIcons, FontAwesome6 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import { getWaterLogs, DailyWater } from '../utils/waterManager';
+import { getStoredSteps } from '../utils/stepManager';
 
 const PRIMARY = "#ccff00";
 const BG_DARK = "#1f230f";
@@ -10,23 +14,95 @@ const TEXT_MUTED = "#94a3b8";
 const BORDER_COLOR = "rgba(255, 255, 255, 0.05)";
 
 const daysOfWeek = ["S", "M", "T", "W", "T", "F", "S"];
-const daysInMonth = Array.from({ length: 30 }, (_, i) => i + 1); // Mock 30 days for June
 
-// Mock data for calendar dots
-const calendarData = {
-  1: 'gray',
-  2: 'primary',
-  3: 'primary',
-  4: 'gray',
-  5: 'active', // Current day
-  7: 'gray',
-};
+const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
 
-const CalendarScreen = () => {
+export default function CalendarScreen() {
   const router = useRouter();
-  const [selectedDay, setSelectedDay] = useState(5);
+  
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState(currentDate.getDate());
+  
+  const [activeProgramId, setActiveProgramId] = useState<string | null>(null);
+  const [schedule, setSchedule] = useState<any[]>([]);
+  const [completedWorkouts, setCompletedWorkouts] = useState<any>({});
+  const [waterData, setWaterData] = useState<DailyWater | null>(null);
+  const [steps, setSteps] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const currentMonthName = currentDate.toLocaleString('default', { month: 'long' });
+  const currentYear = currentDate.getFullYear();
+  const daysInMonthCount = new Date(currentYear, currentDate.getMonth() + 1, 0).getDate();
+  const daysInMonth = Array.from({ length: daysInMonthCount }, (_, i) => i + 1);
+  const firstDayOfMonth = new Date(currentYear, currentDate.getMonth(), 1).getDay(); // 0-6
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadData = async () => {
+        setLoading(true);
+        const user = auth().currentUser;
+        if (!user) {
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const today = new Date();
+          const water = await getWaterLogs(today);
+          setWaterData(water);
+
+          const stps = await getStoredSteps(today);
+          setSteps(stps);
+
+          const userDoc = await firestore().collection('users').doc(user.uid).get();
+          if (userDoc.exists) {
+            const progId = userDoc.data()?.activeProgramId;
+            setActiveProgramId(progId || null);
+
+            if (progId) {
+              const progDoc = await firestore().collection('users').doc(user.uid).collection('program_progress').doc(progId).get();
+              if (progDoc.exists) {
+                setCompletedWorkouts(progDoc.data() || {});
+              }
+
+              const token = await user.getIdToken();
+              const response = await fetch(`${API_URL}/api/program-weeks?programId=${progId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+
+              if (response.ok) {
+                const data = await response.json();
+                const week1 = data.weeks?.['1'] || [];
+                const formattedSchedule = week1.map((item: any) => ({
+                  id: item.id,
+                  day: item.day,
+                  title: item.title,
+                  type: item.type || 'workout',
+                  duration: item.subtitle ? parseInt(String(item.subtitle).split('•')[1] || '45') : 45,
+                  note: item.subtitle || (item.type === 'rest' ? "Rest & Recover" : "")
+                })).sort((a: any, b: any) => a.day - b.day);
+                
+                setSchedule(formattedSchedule);
+              }
+            } else {
+              setSchedule([]);
+            }
+          }
+        } catch (error) {
+          console.error("Error loading calendar data:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      loadData();
+    }, [])
+  );
 
   const getDayStyle = (day: number) => {
+    if (day === selectedDay && currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear()) {
+        return styles.dayCellActive;
+    }
     if (day === selectedDay) return styles.dayCellActive;
     return styles.dayCell;
   };
@@ -34,6 +110,13 @@ const CalendarScreen = () => {
   const getTextStyle = (day: number) => {
     if (day === selectedDay) return styles.dayTextActive;
     return styles.dayText;
+  };
+
+  const changeMonth = (offset: number) => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() + offset);
+    setCurrentDate(newDate);
+    setSelectedDay(1);
   };
 
   return (
@@ -55,12 +138,12 @@ const CalendarScreen = () => {
         
         {/* Month Navigation Header */}
         <View style={styles.monthNav}>
-          <Text style={styles.monthTitle}>June 2024</Text>
+          <Text style={styles.monthTitle}>{currentMonthName} {currentYear}</Text>
           <View style={styles.monthControls}>
-            <TouchableOpacity style={styles.navButton}>
+            <TouchableOpacity style={styles.navButton} onPress={() => changeMonth(-1)}>
               <MaterialIcons name="chevron-left" size={24} color={TEXT_WHITE} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.navButton}>
+            <TouchableOpacity style={styles.navButton} onPress={() => changeMonth(1)}>
               <MaterialIcons name="chevron-right" size={24} color={TEXT_WHITE} />
             </TouchableOpacity>
           </View>
@@ -77,8 +160,8 @@ const CalendarScreen = () => {
           
           {/* Days Grid */}
           <View style={styles.daysGrid}>
-            {/* Empty cells for offset (starts on Saturday) */}
-            {Array.from({ length: 6 }).map((_, i) => (
+            {/* Empty cells for offset */}
+            {Array.from({ length: firstDayOfMonth }).map((_, i) => (
               <View key={`empty-${i}`} style={styles.dayCell} />
             ))}
             
@@ -89,26 +172,12 @@ const CalendarScreen = () => {
                 onPress={() => setSelectedDay(day)}
               >
                 <Text style={getTextStyle(day)}>{day}</Text>
-                {/* Dots indicator */}
-                {(calendarData as any)[day] && (calendarData as any)[day] !== 'active' && (
-                  <View style={styles.dotContainer}>
-                    <View style={[
-                      styles.dot, 
-                      { backgroundColor: (calendarData as any)[day] === 'primary' ? PRIMARY : '#64748b' }
-                    ]} />
-                  </View>
-                )}
-                {(calendarData as any)[day] === 'active' && (
-                   <View style={[styles.dotContainer, { bottom: 4 }]}>
-                      <View style={[styles.dot, { backgroundColor: BG_DARK }]} />
-                   </View>
-                )}
               </TouchableOpacity>
             ))}
             
-            {/* Trailing empty cells */}
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Text key={`trailing-${i}`} style={styles.dayTextTrailing}>{i + 16}</Text>
+            {/* Trailing empty cells to fill the grid if necessary */}
+            {Array.from({ length: (42 - (firstDayOfMonth + daysInMonthCount)) % 7 }).map((_, i) => (
+              <Text key={`trailing-${i}`} style={styles.dayTextTrailing}>{i + 1}</Text>
             ))}
           </View>
         </View>
@@ -117,52 +186,84 @@ const CalendarScreen = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{"Today's Schedule"}</Text>
-            <Text style={styles.dateLabel}>June 5, 2024</Text>
+            <Text style={styles.dateLabel}>{currentMonthName} {selectedDay}, {currentYear}</Text>
           </View>
 
-          {/* Workout Card: Completed */}
-          <View style={styles.scheduleCardCompleted}>
-            <View style={styles.scheduleRow}>
-              <View>
-                <Text style={styles.scheduleTitle}>Upper Body Power</Text>
-                <View style={styles.scheduleMeta}>
-                  <MaterialIcons name="schedule" size={14} color={TEXT_MUTED} />
-                  <Text style={styles.scheduleMetaText}>08:00 AM • 45 min</Text>
-                </View>
-              </View>
-              <View style={styles.statusBadgeCompleted}>
-                <MaterialIcons name="check-circle" size={12} color={BG_DARK} />
-                <Text style={styles.statusTextCompleted}>COMPLETED</Text>
-              </View>
+          {loading ? (
+            <ActivityIndicator size="small" color={PRIMARY} style={{ marginTop: 20 }} />
+          ) : !activeProgramId ? (
+            <View style={{ alignItems: 'center', padding: 20 }}>
+              <Text style={{ color: TEXT_MUTED }}>No active workout</Text>
             </View>
-          </View>
+          ) : schedule.length === 0 ? (
+            <View style={{ alignItems: 'center', padding: 20 }}>
+              <Text style={{ color: TEXT_MUTED }}>No schedule available</Text>
+            </View>
+          ) : (
+            (() => {
+              // Find the first incomplete workout to show the START button
+              const nextWorkout = schedule.find(item => {
+                if (item.type === 'rest') return false;
+                const isCompleted = completedWorkouts && completedWorkouts['WEEK 1'] ? completedWorkouts['WEEK 1'][item.day] === true : false;
+                return !isCompleted;
+              });
 
-          {/* Workout Card: Upcoming */}
-          <View style={styles.scheduleCardUpcoming}>
-            <View style={styles.scheduleRow}>
-              <View>
-                <Text style={styles.scheduleTitle}>HIIT Cardio Blast</Text>
-                <View style={styles.scheduleMeta}>
-                  <MaterialIcons name="schedule" size={14} color={TEXT_MUTED} />
-                  <Text style={styles.scheduleMetaText}>05:30 PM • 30 min</Text>
-                </View>
-              </View>
-              <View style={styles.statusBadgeUpcoming}>
-                <Text style={styles.statusTextUpcoming}>UPCOMING</Text>
-              </View>
-            </View>
-          </View>
+              return schedule.map((item) => {
+                const isCompleted = completedWorkouts && completedWorkouts['WEEK 1'] ? completedWorkouts['WEEK 1'][item.day] === true : false;
+                const isNextWorkout = nextWorkout && item.day === nextWorkout.day;
+                
+                if (item.type === 'rest') {
+                  return (
+                    <View key={item.day} style={styles.restDayCard}>
+                      <View style={styles.restIconBox}>
+                        <MaterialIcons name="bedtime" size={24} color={TEXT_MUTED} />
+                      </View>
+                      <View>
+                        <Text style={styles.restTitle}>Active Recovery - Day {item.day}</Text>
+                        <Text style={styles.restSubtitle}>{item.note}</Text>
+                      </View>
+                    </View>
+                  );
+                }
 
-          {/* Rest Day */}
-          <View style={styles.restDayCard}>
-            <View style={styles.restIconBox}>
-              <MaterialIcons name="bedtime" size={24} color={TEXT_MUTED} />
-            </View>
-            <View>
-              <Text style={styles.restTitle}>Active Recovery</Text>
-              <Text style={styles.restSubtitle}>Light stretching and mobility</Text>
-            </View>
-          </View>
+                return (
+                  <View key={item.day} style={isCompleted ? styles.scheduleCardCompleted : styles.scheduleCardUpcoming}>
+                    <View style={styles.scheduleRow}>
+                      <View>
+                        <Text style={styles.scheduleTitle}>{item.title} - Day {item.day}</Text>
+                        <View style={styles.scheduleMeta}>
+                          <MaterialIcons name="schedule" size={14} color={TEXT_MUTED} />
+                          <Text style={styles.scheduleMetaText}>{item.note}</Text>
+                        </View>
+                      </View>
+                      {isCompleted ? (
+                        <View style={styles.statusBadgeCompleted}>
+                          <MaterialIcons name="check-circle" size={12} color={BG_DARK} />
+                          <Text style={styles.statusTextCompleted}>COMPLETED</Text>
+                        </View>
+                      ) : isNextWorkout ? (
+                        <TouchableOpacity 
+                          style={styles.startButton}
+                          activeOpacity={0.8}
+                          onPress={() => router.push({
+                            pathname: '/screens/WeeklyProgramScreen',
+                            params: { programId: activeProgramId }
+                          })}
+                        >
+                          <Text style={styles.startButtonText}>START</Text>
+                          <MaterialIcons name="play-arrow" size={16} color={BG_DARK} />
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.statusBadgeUpcoming}>
+                          <Text style={styles.statusTextUpcoming}>UPCOMING</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              });
+            })()
+          )}
         </View>
 
         {/* Daily Activity */}
@@ -176,11 +277,11 @@ const CalendarScreen = () => {
                 <Text style={styles.activityLabel}>STEPS</Text>
               </View>
               <View>
-                <Text style={styles.activityValue}>8,432</Text>
+                <Text style={styles.activityValue}>{steps.toLocaleString()}</Text>
                 <Text style={styles.activitySubtext}>/ 10,000 steps</Text>
               </View>
               <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: '84%' }]} />
+                <View style={[styles.progressBarFill, { width: `${Math.min((steps / 10000) * 100, 100)}%` }]} />
               </View>
             </View>
 
@@ -191,11 +292,11 @@ const CalendarScreen = () => {
                 <Text style={styles.activityLabel}>HYDRATION</Text>
               </View>
               <View>
-                <Text style={styles.activityValue}>1,200 ml</Text>
-                <Text style={styles.activitySubtext}>/ 2,500 ml</Text>
+                <Text style={styles.activityValue}>{waterData?.totalConsumed || 0} ml</Text>
+                <Text style={styles.activitySubtext}>/ {waterData?.goal || 2500} ml</Text>
               </View>
               <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: '48%' }]} />
+                <View style={[styles.progressBarFill, { width: `${Math.min(((waterData?.totalConsumed || 0) / (waterData?.goal || 2500)) * 100, 100)}%` }]} />
               </View>
             </View>
           </View>
@@ -212,7 +313,7 @@ const CalendarScreen = () => {
       </TouchableOpacity>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -318,52 +419,6 @@ const styles = StyleSheet.create({
     color: '#64748b', // slate-500
     opacity: 0.3,
   },
-  dotContainer: {
-    flexDirection: 'row',
-    gap: 2,
-    marginTop: 4,
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
-  statsCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: 16,
-    marginVertical: 8,
-    padding: 20,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER_COLOR,
-  },
-  statsLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: TEXT_MUTED,
-  },
-  statsValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: TEXT_WHITE,
-  },
-  statsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(204, 255, 0, 0.2)',
-  },
-  statsBadgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: PRIMARY,
-  },
   section: {
     paddingHorizontal: 16,
     paddingVertical: 24,
@@ -406,18 +461,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   scheduleTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: TEXT_WHITE,
+    marginBottom: 4,
   },
   scheduleMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
+    gap: 4,
   },
   scheduleMetaText: {
-    fontSize: 14,
+    fontSize: 12,
     color: TEXT_MUTED,
   },
   statusBadgeCompleted: {
@@ -425,134 +480,131 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: PRIMARY,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 8,
   },
   statusTextCompleted: {
     fontSize: 10,
-    fontWeight: '900',
+    fontWeight: 'bold',
     color: BG_DARK,
-    textTransform: 'uppercase',
   },
   statusBadgeUpcoming: {
     backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 8,
   },
   statusTextUpcoming: {
     fontSize: 10,
-    fontWeight: '900',
+    fontWeight: 'bold',
     color: TEXT_MUTED,
-    textTransform: 'uppercase',
   },
   restDayCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
     padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: BORDER_COLOR,
     borderStyle: 'dashed',
+    marginBottom: 16,
   },
   restIconBox: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   restTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: TEXT_MUTED,
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: TEXT_WHITE,
+    marginBottom: 4,
   },
   restSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.3)',
+    fontSize: 13,
+    color: TEXT_MUTED,
   },
   activityGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 16,
-    marginTop: 16,
   },
   activityCard: {
-    width: (Dimensions.get('window').width - 48) / 2, // (screen width - padding - gap) / 2
-    padding: 16,
+    width: '47.5%',
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
     borderColor: BORDER_COLOR,
-    gap: 8,
   },
   activityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginBottom: 12,
   },
   activityLabel: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: PRIMARY,
-    textTransform: 'uppercase',
+    color: TEXT_WHITE,
     letterSpacing: 1,
   },
   activityValue: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: TEXT_WHITE,
+    marginBottom: 2,
   },
   activitySubtext: {
-    fontSize: 10,
+    fontSize: 12,
     color: TEXT_MUTED,
+    marginBottom: 12,
   },
   progressBarBg: {
-    height: 6,
+    height: 4,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 3,
-    marginTop: 4,
+    borderRadius: 2,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
     backgroundColor: PRIMARY,
-    borderRadius: 3,
+    borderRadius: 2,
+  },
+  startButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: PRIMARY,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  startButtonText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: BG_DARK,
   },
   fab: {
     position: 'absolute',
-    bottom: 32,
-    right: 32,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    bottom: 24,
+    right: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: PRIMARY,
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 4,
     shadowColor: PRIMARY,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowRadius: 8,
   },
 });
-
-// Override container background for dark mode context
-const darkStyles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: BG_DARK,
-    }
-});
-
-export default function CalendarScreenWrapper() {
-    return (
-        <View style={darkStyles.container}>
-            <CalendarScreen />
-        </View>
-    );
-}
