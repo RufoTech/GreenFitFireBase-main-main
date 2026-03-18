@@ -161,10 +161,6 @@ export default function LogWaterScreen() {
   const handleGoalUpdate = async () => {
       const newGoal = parseInt(tempGoal);
       if (newGoal > 0) {
-          // Goal is still saved immediately as it might be a global preference, 
-          // or we can make it local too? Let's keep it immediate for now as per usual settings behavior,
-          // OR if user wants "everything" to be saved only on Save Program, we should defer this too.
-          // User said "save olunmasın elediyi deyişiklikler". So let's defer goal too.
           setGoal(newGoal);
           setIsGoalEditing(false);
       }
@@ -315,7 +311,7 @@ export default function LogWaterScreen() {
                                     onBlur={handleGoalUpdate}
                                     onSubmitEditing={handleGoalUpdate}
                                 />
-                                <Text style={styles.goalText}>L</Text>
+                                <Text style={styles.goalText}>ml</Text>
                             </View>
                         ) : (
                             <TouchableOpacity onPress={() => {
