@@ -51,6 +51,15 @@ export default function MonthlyWorkoutLibraryScreen() {
   const { openProgramId } = useLocalSearchParams();
 
   const handleProgramPress = (program: any) => {
+    // If it's the active program, skip the modal and go directly to WeeklyProgramScreen
+    if (activeProgram === program.id) {
+        router.push({
+            pathname: '/screens/WeeklyProgramScreen',
+            params: { programId: program.id }
+        });
+        return;
+    }
+    
     setSelectedProgram(program);
     setModalVisible(true);
   };
