@@ -5,7 +5,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Pedometer } from 'expo-sensors';
 import * as IntentLauncher from 'expo-intent-launcher';
-import * as Battery from 'expo-battery';
+import { BatteryOptEnabled, RequestDisableOptimization } from 'react-native-battery-optimization-check';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getStoredSteps, saveSteps, getLast7DaysSteps, getAllHistory, getMonthSteps, formatDate, DailySteps, registerBackgroundFetchAsync, unregisterBackgroundFetchAsync } from '../utils/stepManager';
 
@@ -71,6 +71,7 @@ export default function AddStepsScreen() {
   const [pastDays, setPastDays] = useState<DailySteps[]>([]);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [isBlocked, setIsBlocked] = useState(false);
   const [calendarDays, setCalendarDays] = useState<any[]>([]);
   const subscription = useRef<Pedometer.Subscription | null>(null);
   const appState = useRef(AppState.currentState);
@@ -139,37 +140,33 @@ export default function AddStepsScreen() {
 
   const checkBatteryOptimization = async () => {
       if (Platform.OS === 'android') {
-          // expo-battery kullanarak cihazın pil tasarrufu modunda olup olmadığını kontrol ediyoruz
-          const isBatteryOptimizationEnabled = await Battery.isLowPowerModeEnabledAsync();
-          
-          if (isBatteryOptimizationEnabled) {
-              Alert.alert(
-                  "Pil Təsarüfü Açıqdır!",
-                  "Addım sayarın arxa planda düzgün işləməsi üçün telefonun ayarlarından 'Pil Təsarüfü'nü (Battery Saver / Low Power Mode) söndürməlisiniz. Əks halda addımlarınız sayılmayacaq.",
-                  [
-                      { 
-                          text: "Geri qayıt", 
-                          onPress: () => router.back(),
-                          style: "cancel"
-                      },
-                      { 
-                          text: "Ayarlara get", 
-                          onPress: () => {
-                              IntentLauncher.startActivityAsync(
-                                  IntentLauncher.ActivityAction.IGNORE_BATTERY_OPTIMIZATION_SETTINGS
-                              ).catch(() => {
-                                  // Fallback to app settings
-                                  IntentLauncher.startActivityAsync(
-                                      IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS,
-                                      { data: 'package:com.radevolopment.greenfit' }
-                                  );
-                              });
-                              router.back();
-                          } 
-                      }
-                  ],
-                  { cancelable: false }
-              );
+          try {
+              const isEnabled = await BatteryOptEnabled();
+              if (isEnabled) {
+                  setIsBlocked(true);
+                  Alert.alert(
+                      "Arxa Plan Məhdudiyyəti Açıqdır!",
+                      "Addım sayarın arxa planda düzgün işləməsi üçün tətbiqin pil təsarüfü (Battery Optimization) məhdudiyyətini ləğv etməlisiniz.",
+                      [
+                          { 
+                              text: "Geri qayıt", 
+                              onPress: () => router.back(),
+                              style: "cancel"
+                          },
+                          { 
+                              text: "Məhdudiyyəti Qaldır", 
+                              onPress: () => {
+                                  RequestDisableOptimization();
+                              } 
+                          }
+                      ],
+                      { cancelable: false }
+                  );
+              } else {
+                  setIsBlocked(false);
+              }
+          } catch (error) {
+              console.log("Battery optimization check error:", error);
           }
       }
   };
@@ -326,6 +323,39 @@ export default function AddStepsScreen() {
   ];
 
   const currentMonthName = `${monthNames[currentMonth.getMonth()]} | ${monthNamesAz[currentMonth.getMonth()]}`;
+
+  if (isBlocked) {
+      return (
+          <SafeAreaView style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+              <StatusBar barStyle="light-content" backgroundColor="#1f230f" />
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                  <MaterialIcons name="battery-alert" size={64} color={PRIMARY} style={{ marginBottom: 16 }} />
+                  <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', textAlign: 'center', marginBottom: 12 }}>
+                      Arxa Plan Məhdudiyyəti Açıqdır!
+                  </Text>
+                  <Text style={{ fontSize: 16, color: '#ccc', textAlign: 'center', marginBottom: 24 }}>
+                      Addım sayarın arxa planda işləməsi üçün tətbiqin pil təsarüfü (Battery Optimization) məhdudiyyətini ləğv etməlisiniz.
+                  </Text>
+                  
+                  <TouchableOpacity 
+                      style={{ backgroundColor: PRIMARY, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8, marginBottom: 12, width: '100%' }}
+                      onPress={() => {
+                          RequestDisableOptimization();
+                      }}
+                  >
+                      <Text style={{ color: '#000', fontWeight: 'bold', textAlign: 'center' }}>Məhdudiyyəti Qaldır</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                      style={{ paddingVertical: 12, paddingHorizontal: 24, width: '100%' }}
+                      onPress={() => router.back()}
+                  >
+                      <Text style={{ color: '#ccc', fontWeight: 'bold', textAlign: 'center' }}>Geri Qayıt</Text>
+                  </TouchableOpacity>
+              </View>
+          </SafeAreaView>
+      );
+  }
 
   return (
     <SafeAreaView style={styles.container}>

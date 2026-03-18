@@ -2,8 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing, Platform, Alert } from 'react-native';
 import { MaterialIcons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Battery from 'expo-battery';
-import * as IntentLauncher from 'expo-intent-launcher';
+import { BatteryOptEnabled, RequestDisableOptimization } from 'react-native-battery-optimization-check';
 
 const { height } = Dimensions.get('window');
 
@@ -76,31 +75,28 @@ export default function QuickActionsOverlay({ visible, onClose }: QuickActionsOv
 
   const handleActionPress = async (route: string) => {
       if (route === '/screens/AddStepsScreen' && Platform.OS === 'android') {
-          const isBatteryOptimizationEnabled = await Battery.isLowPowerModeEnabledAsync();
-          if (isBatteryOptimizationEnabled) {
-              Alert.alert(
-                  "Pil Təsarüfü Açıqdır!",
-                  "Addım sayarın arxa planda düzgün işləməsi üçün telefonun ayarlarından 'Pil Təsarüfü'nü (Battery Saver / Low Power Mode) söndürməlisiniz.",
-                  [
-                      { text: "Ləğv et", style: "cancel" },
-                      { 
-                          text: "Ayarlara get", 
-                          onPress: () => {
-                              IntentLauncher.startActivityAsync(
-                                  IntentLauncher.ActivityAction.IGNORE_BATTERY_OPTIMIZATION_SETTINGS
-                              ).catch(() => {
-                                  IntentLauncher.startActivityAsync(
-                                      IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS,
-                                      { data: 'package:com.radevolopment.greenfit' }
-                                  );
-                              });
-                          } 
-                      }
-                  ],
-                  { cancelable: false }
-              );
-              onClose(); // close the menu
-              return; // STOP navigation
+          try {
+              const isEnabled = await BatteryOptEnabled();
+              if (isEnabled) {
+                  Alert.alert(
+                      "Arxa Plan Məhdudiyyəti Açıqdır!",
+                      "Addım sayarın arxa planda düzgün işləməsi üçün tətbiqin pil təsarüfü (Battery Optimization) məhdudiyyətini ləğv etməlisiniz.",
+                      [
+                          { text: "Ləğv et", style: "cancel" },
+                          { 
+                              text: "Məhdudiyyəti Qaldır", 
+                              onPress: () => {
+                                  RequestDisableOptimization();
+                              } 
+                          }
+                      ],
+                      { cancelable: false }
+                  );
+                  onClose(); // close the menu
+                  return; // STOP navigation
+              }
+          } catch (error) {
+              console.log("Battery optimization check error:", error);
           }
       }
 
