@@ -66,8 +66,31 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
-      await auth().signInWithEmailAndPassword(email, password);
-      router.replace('/screens/GoalSelectionScreen');
+      const userCredential = await auth().signInWithEmailAndPassword(email, password);
+      const user = userCredential.user;
+
+      if (user.emailVerified) {
+        router.replace('/screens/GoalSelectionScreen');
+      } else {
+        Alert.alert(
+          'Doğrulama Gerekli',
+          'Lütfen giriş yapmadan önce e-posta adresinizi doğrulayın.',
+          [
+            { 
+              text: 'Tekrar Gönder', 
+              onPress: async () => {
+                await user.sendEmailVerification();
+                await auth().signOut();
+                Alert.alert('Bilgi', 'Doğrulama e-postası tekrar gönderildi.');
+              }
+            },
+            { 
+              text: 'Tamam',
+              onPress: async () => await auth().signOut()
+            }
+          ]
+        );
+      }
     } catch (error: any) {
       console.error(error);
       Alert.alert('Giriş Hatası', error.message || 'Giriş yapılamadı.');

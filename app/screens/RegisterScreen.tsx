@@ -80,7 +80,16 @@ export default function RegisterScreen() {
       // Optional: Update user profile with full name
       await userCredential.user.updateProfile({ displayName: fullName });
       
-      router.replace('/screens/GoalSelectionScreen');
+      // Send email verification
+      await userCredential.user.sendEmailVerification();
+      
+      Alert.alert(
+        'Kayıt Başarılı', 
+        'Hesabınız oluşturuldu. Lütfen e-postanızı kontrol ederek hesabınızı doğrulayın.',
+        [
+          { text: 'Tamam', onPress: () => router.replace('/screens/LoginScreen') }
+        ]
+      );
     } catch (error: any) {
       console.error(error);
       Alert.alert('Kayıt Hatası', error.message || 'Kayıt olunamadı.');
