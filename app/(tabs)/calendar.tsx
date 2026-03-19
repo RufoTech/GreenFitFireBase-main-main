@@ -4,6 +4,7 @@ import { MaterialIcons, FontAwesome6 } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getWaterLogs, DailyWater } from '../utils/waterManager';
 import { getStoredSteps } from '../utils/stepManager';
 
@@ -28,6 +29,7 @@ export default function CalendarScreen() {
   const [completedWorkouts, setCompletedWorkouts] = useState<any>({});
   const [waterData, setWaterData] = useState<DailyWater | null>(null);
   const [steps, setSteps] = useState(0);
+  const [nutritionData, setNutritionData] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, goalCalories: 2400 });
   const [loading, setLoading] = useState(true);
 
   const currentMonthName = currentDate.toLocaleString('default', { month: 'long' });
@@ -35,6 +37,37 @@ export default function CalendarScreen() {
   const daysInMonthCount = new Date(currentYear, currentDate.getMonth() + 1, 0).getDate();
   const daysInMonth = Array.from({ length: daysInMonthCount }, (_, i) => i + 1);
   const firstDayOfMonth = new Date(currentYear, currentDate.getMonth(), 1).getDay(); // 0-6
+
+  const fetchNutritionForDate = async (dateObj: Date) => {
+    try {
+      const dateStr = dateObj.toISOString().split('T')[0];
+      const storedMeals = await AsyncStorage.getItem(`meals_${dateStr}`);
+      const storedGoal = await AsyncStorage.getItem('goalCalories');
+      
+      let cals = 0, prot = 0, car = 0, f = 0;
+      if (storedMeals) {
+        const parsedMeals = JSON.parse(storedMeals);
+        Object.values(parsedMeals).forEach((mealList: any) => {
+          mealList.forEach((item: any) => {
+            cals += Number(item.calories) || 0;
+            prot += Number(item.protein) || 0;
+            car += Number(item.carbs) || 0;
+            f += Number(item.fat) || 0;
+          });
+        });
+      }
+      
+      setNutritionData({
+        calories: Math.round(cals),
+        protein: Math.round(prot),
+        carbs: Math.round(car),
+        fat: Math.round(f),
+        goalCalories: storedGoal ? parseInt(storedGoal) : 2400
+      });
+    } catch (error) {
+      console.error("Error loading nutrition data:", error);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -47,12 +80,14 @@ export default function CalendarScreen() {
         }
 
         try {
-          const today = new Date();
-          const water = await getWaterLogs(today);
+          const selectedDateObj = new Date(currentYear, currentDate.getMonth(), selectedDay);
+          const water = await getWaterLogs(selectedDateObj);
           setWaterData(water);
 
-          const stps = await getStoredSteps(today);
+          const stps = await getStoredSteps(selectedDateObj);
           setSteps(stps);
+
+          await fetchNutritionForDate(selectedDateObj);
 
           const userDoc = await firestore().collection('users').doc(user.uid).get();
           if (userDoc.exists) {
@@ -119,6 +154,21 @@ export default function CalendarScreen() {
     setSelectedDay(1);
   };
 
+  // When a specific day is pressed
+  const handleDayPress = async (day: number) => {
+    setSelectedDay(day);
+    const selectedDateObj = new Date(currentYear, currentDate.getMonth(), day);
+    
+    // Update local data specifically for this day without reloading everything
+    const water = await getWaterLogs(selectedDateObj);
+    setWaterData(water);
+
+    const stps = await getStoredSteps(selectedDateObj);
+    setSteps(stps);
+
+    await fetchNutritionForDate(selectedDateObj);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={BG_DARK} />
@@ -169,7 +219,7 @@ export default function CalendarScreen() {
               <TouchableOpacity 
                 key={day} 
                 style={getDayStyle(day)}
-                onPress={() => setSelectedDay(day)}
+                onPress={() => handleDayPress(day)}
               >
                 <Text style={getTextStyle(day)}>{day}</Text>
               </TouchableOpacity>
@@ -269,6 +319,27 @@ export default function CalendarScreen() {
         {/* Daily Activity */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Daily Activity</Text>
+          
+          {/* Energy Summary Card */}
+          <View style={[styles.energyCard, { marginBottom: 16 }]}>
+            <View style={styles.activityHeader}>
+              <MaterialIcons name="local-fire-department" size={20} color="#f97316" />
+              <Text style={styles.activityLabel}>ENERGY</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 }}>
+              <Text style={styles.activityValue}>{nutritionData.calories}</Text>
+              <Text style={styles.activitySubtext}> / {nutritionData.goalCalories} kcal</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 12, color: TEXT_MUTED }}>Protein: {nutritionData.protein}g</Text>
+              <Text style={{ fontSize: 12, color: TEXT_MUTED }}>Carbs: {nutritionData.carbs}g</Text>
+              <Text style={{ fontSize: 12, color: TEXT_MUTED }}>Fat: {nutritionData.fat}g</Text>
+            </View>
+            <View style={[styles.progressBarBg, { marginTop: 12 }]}>
+              <View style={[styles.progressBarFill, { width: `${Math.min((nutritionData.calories / nutritionData.goalCalories) * 100, 100)}%`, backgroundColor: '#f97316' }]} />
+            </View>
+          </View>
+
           <View style={styles.activityGrid}>
             {/* Steps */}
             <View style={styles.activityCard}>
@@ -532,6 +603,14 @@ const styles = StyleSheet.create({
   },
   activityCard: {
     width: '47.5%',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+  },
+  energyCard: {
+    width: '100%',
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 16,
     padding: 16,

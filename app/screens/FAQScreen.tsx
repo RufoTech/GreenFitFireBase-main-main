@@ -40,7 +40,6 @@ const FAQ_ITEMS = [
 
 export default function FAQScreen() {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<number | null>(1);
 
   const toggleAccordion = (id: number) => {
@@ -65,18 +64,7 @@ export default function FAQScreen() {
         {/* Search & Hero Section */}
         <View style={styles.heroSection}>
           <Text style={styles.heroTitle}>How can we <Text style={styles.heroHighlight}>help?</Text></Text>
-          <Text style={styles.heroSubtitle}>Search our knowledge base or browse categories below.</Text>
-          
-          <View style={styles.searchContainer}>
-            <MaterialIcons name="search" size={24} color={TEXT_MUTED} style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search for questions..."
-              placeholderTextColor={TEXT_MUTED}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
+          <Text style={styles.heroSubtitle}>Browse our knowledge base or categories below.</Text>
         </View>
 
         {/* Categories Grid */}
@@ -125,10 +113,7 @@ export default function FAQScreen() {
           </View>
 
           <View style={styles.accordionContainer}>
-            {FAQ_ITEMS.filter((item) => 
-              item.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              item.answer.toLowerCase().includes(searchQuery.toLowerCase())
-            ).map((item) => {
+            {FAQ_ITEMS.map((item) => {
               const isExpanded = expandedId === item.id;
               return (
                 <View 
@@ -211,7 +196,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   heroSection: {
-    marginBottom: 48,
+    marginBottom: 24, // Reduced from 48 to remove empty space
   },
   heroTitle: {
     fontSize: 32,
@@ -226,7 +211,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: TEXT_MUTED,
     opacity: 0.8,
-    marginBottom: 32,
+    marginBottom: 8, // Reduced from 32
   },
   searchContainer: {
     flexDirection: 'row',

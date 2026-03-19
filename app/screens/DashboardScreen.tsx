@@ -1,4 +1,5 @@
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -61,6 +62,7 @@ export default function DashboardScreen() {
   
   const [waterData, setWaterData] = useState<{ today: number; yesterday: number }>({ today: 0, yesterday: 0 });
   const [stepsData, setStepsData] = useState<{ today: number; yesterday: number }>({ today: 0, yesterday: 0 });
+  const [nutritionData, setNutritionData] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, goalCalories: 2400 });
 
   useFocusEffect(
     useCallback(() => {
@@ -84,6 +86,36 @@ export default function DashboardScreen() {
           today: stepsToday,
           yesterday: stepsYesterday
         });
+
+        // Nutrition (Meals)
+        try {
+          const todayStr = today.toISOString().split('T')[0];
+          const storedMeals = await AsyncStorage.getItem(`meals_${todayStr}`);
+          const storedGoal = await AsyncStorage.getItem('goalCalories');
+          
+          let cals = 0, prot = 0, car = 0, f = 0;
+          if (storedMeals) {
+            const parsedMeals = JSON.parse(storedMeals);
+            Object.values(parsedMeals).forEach((mealList: any) => {
+              mealList.forEach((item: any) => {
+                cals += Number(item.calories) || 0;
+                prot += Number(item.protein) || 0;
+                car += Number(item.carbs) || 0;
+                f += Number(item.fat) || 0;
+              });
+            });
+          }
+          
+          setNutritionData({
+            calories: Math.round(cals),
+            protein: Math.round(prot),
+            carbs: Math.round(car),
+            fat: Math.round(f),
+            goalCalories: storedGoal ? parseInt(storedGoal) : 2400
+          });
+        } catch (error) {
+          console.error("Error loading nutrition data:", error);
+        }
       };
 
       loadActivityData();
@@ -284,6 +316,23 @@ export default function DashboardScreen() {
 
         {/* Weekly Summary Section */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.summaryContainer}>
+          {/* Energy Card */}
+          <View style={[styles.summaryCard, { backgroundColor: isDark ? currentTheme.cardBg : '#ffffff', borderColor: isDark ? currentTheme.cardBorder : '#e2e8f0' }]}>
+            <View style={styles.summaryHeader}>
+              <MaterialIcons name="local-fire-department" size={20} color="#f97316" />
+              <Text style={[styles.summaryTitle, { color: currentTheme.subtext }]}>Energy</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+              <Text style={[styles.summaryValue, { color: currentTheme.text }]}>{nutritionData.calories}</Text>
+              <Text style={{ fontSize: 12, color: currentTheme.subtext, marginLeft: 2 }}>/ {nutritionData.goalCalories} kcal</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+              <Text style={{ fontSize: 10, color: currentTheme.subtext }}>P: {nutritionData.protein}g</Text>
+              <Text style={{ fontSize: 10, color: currentTheme.subtext }}>C: {nutritionData.carbs}g</Text>
+              <Text style={{ fontSize: 10, color: currentTheme.subtext }}>F: {nutritionData.fat}g</Text>
+            </View>
+          </View>
+
           <View style={[styles.summaryCard, { backgroundColor: isDark ? currentTheme.cardBg : '#ffffff', borderColor: isDark ? currentTheme.cardBorder : '#e2e8f0' }]}>
             <View style={styles.summaryHeader}>
               <MaterialIcons name="water-drop" size={20} color="#3b82f6" />
