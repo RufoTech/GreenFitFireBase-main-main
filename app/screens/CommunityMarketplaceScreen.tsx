@@ -10,7 +10,9 @@ import {
   ImageBackground,
   ActivityIndicator,
   Alert,
-  Platform
+  Platform,
+  TextInput,
+  ScrollView
 } from 'react-native';
 import { MaterialIcons, Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -31,11 +33,20 @@ export default function CommunityMarketplaceScreen() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Search, Filter, Pagination state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [visibleCount, setVisibleCount] = useState(10);
+
   const currentUser = auth().currentUser;
 
   useFocusEffect(
     useCallback(() => {
       fetchCommunityItems();
+      // Reset search/filter/pagination when tab changes
+      setSearchQuery('');
+      setSelectedCategory('All');
+      setVisibleCount(10);
     }, [activeTab])
   );
 
@@ -299,6 +310,57 @@ export default function CommunityMarketplaceScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <MaterialIcons name="search" size={24} color="#64748b" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={`Search ${activeTab}...`}
+            placeholderTextColor="#64748b"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+      </View>
+
+      {/* Category Filters */}
+      <View style={styles.categoryContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+          {(() => {
+            // Get unique categories for the active tab
+            const categoriesSet = new Set<string>();
+            categoriesSet.add('All');
+            items.forEach(item => {
+              const type = activeTab === 'programs' ? item.focus : item.targetMuscle;
+              if (type) categoriesSet.add(type);
+            });
+            const categories = Array.from(categoriesSet);
+
+            return categories.map((category) => (
+              <TouchableOpacity
+                key={category}
+                style={[
+                  styles.categoryChip,
+                  selectedCategory === category && styles.activeCategoryChip
+                ]}
+                onPress={() => {
+                  setSelectedCategory(category);
+                  setVisibleCount(10); // Reset pagination on category change
+                }}
+              >
+                <Text style={[
+                  styles.categoryText,
+                  selectedCategory === category && styles.activeCategoryText
+                ]}>
+                  {category}
+                </Text>
+              </TouchableOpacity>
+            ));
+          })()}
+        </ScrollView>
+      </View>
+
       {/* List */}
       {loading ? (
         <View style={styles.centerContainer}>
@@ -312,11 +374,37 @@ export default function CommunityMarketplaceScreen() {
         </View>
       ) : (
         <FlatList
-          data={items}
+          data={(() => {
+            const filtered = items.filter(item => {
+              const matchesSearch = item.title?.toLowerCase().includes(searchQuery.toLowerCase()) || false;
+              const type = activeTab === 'programs' ? item.focus : item.targetMuscle;
+              const matchesCategory = selectedCategory === 'All' || type === selectedCategory;
+              return matchesSearch && matchesCategory;
+            });
+            return filtered.slice(0, visibleCount);
+          })()}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={(() => {
+            const filteredLength = items.filter(item => {
+              const matchesSearch = item.title?.toLowerCase().includes(searchQuery.toLowerCase()) || false;
+              const type = activeTab === 'programs' ? item.focus : item.targetMuscle;
+              const matchesCategory = selectedCategory === 'All' || type === selectedCategory;
+              return matchesSearch && matchesCategory;
+            }).length;
+
+            return filteredLength > visibleCount ? (
+              <TouchableOpacity 
+                style={styles.loadMoreButton}
+                onPress={() => setVisibleCount(prev => prev + 10)}
+              >
+                <Text style={styles.loadMoreText}>Load More</Text>
+                <MaterialIcons name="keyboard-arrow-down" size={20} color="#1f230f" />
+              </TouchableOpacity>
+            ) : null;
+          })()}
         />
       )}
     </SafeAreaView>
@@ -374,8 +462,72 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 20,
-    paddingTop: 0,
+    paddingTop: 10,
     paddingBottom: 100,
+  },
+  searchContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0f1108',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 16,
+    height: 48,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#f8fafc',
+    fontSize: 16,
+  },
+  categoryContainer: {
+    marginBottom: 16,
+  },
+  categoryScroll: {
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  categoryChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#0f1108',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  activeCategoryChip: {
+    backgroundColor: PRIMARY,
+    borderColor: PRIMARY,
+  },
+  categoryText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  activeCategoryText: {
+    color: '#1f230f',
+  },
+  loadMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: PRIMARY,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 10,
+    gap: 8,
+  },
+  loadMoreText: {
+    color: '#1f230f',
+    fontSize: 16,
+    fontWeight: '700',
   },
   card: {
     backgroundColor: '#0f1108',
