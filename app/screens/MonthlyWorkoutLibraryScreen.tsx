@@ -49,6 +49,7 @@ export default function MonthlyWorkoutLibraryScreen() {
 
   const [activeProgram, setActiveProgram] = useState<string | null>(null);
   const [warningModalVisible, setWarningModalVisible] = useState(false);
+  const [sharedProgramIds, setSharedProgramIds] = useState<Set<string>>(new Set());
 
   const { openProgramId } = useLocalSearchParams();
 
@@ -184,6 +185,23 @@ export default function MonthlyWorkoutLibraryScreen() {
             setUserPrograms(fetchedPrograms);
             setLoading(false);
 
+            // Check which programs are already shared to community
+            if (user) {
+              firestore()
+                .collection('community_shared_programs')
+                .where('authorId', '==', user.uid)
+                .get()
+                .then(sharedSnap => {
+                  const ids = new Set<string>();
+                  sharedSnap.docs.forEach(doc => {
+                    const d = doc.data();
+                    if (d.originalId) ids.add(d.originalId);
+                  });
+                  setSharedProgramIds(ids);
+                })
+                .catch(e => console.error('Error fetching shared programs:', e));
+            }
+
             // Check if we need to open a specific program from navigation params
             if (openProgramId) {
                 const programToOpen = fetchedPrograms.find(p => p.id === openProgramId);
@@ -286,6 +304,10 @@ export default function MonthlyWorkoutLibraryScreen() {
   };
 
   const handleShareProgram = (program: any) => {
+    if (sharedProgramIds.has(program.id)) {
+      Alert.alert('Artıq paylaşılıb', 'Bu proqram artıq icmaya paylaşılıb.');
+      return;
+    }
     Alert.alert(
       "Share Program",
       "Do you want to share this program with the community?",
@@ -331,6 +353,8 @@ export default function MonthlyWorkoutLibraryScreen() {
                 throw new Error('Failed to share program');
               }
 
+              // Mark as shared locally
+              setSharedProgramIds(prev => new Set(prev).add(program.id));
               Alert.alert("Success", "Your program has been shared with the community!");
             } catch (error) {
               console.error("Error sharing program:", error);
@@ -440,12 +464,19 @@ export default function MonthlyWorkoutLibraryScreen() {
                               <Text style={styles.noImageTitle}>{program.name}</Text>
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <TouchableOpacity 
-                                  onPress={() => handleShareProgram(program)}
-                                  style={{ padding: 4, marginRight: 8 }}
-                              >
-                                  <MaterialIcons name="share" size={24} color="#3b82f6" />
-                              </TouchableOpacity>
+                              {sharedProgramIds.has(program.id) ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 4, marginRight: 8 }}>
+                                  <MaterialIcons name="check-circle" size={18} color="#22c55e" />
+                                  <Text style={{ color: '#22c55e', fontSize: 12, fontWeight: '700' }}>Shared</Text>
+                                </View>
+                              ) : (
+                                <TouchableOpacity 
+                                    onPress={() => handleShareProgram(program)}
+                                    style={{ padding: 4, marginRight: 8 }}
+                                >
+                                    <MaterialIcons name="share" size={24} color="#3b82f6" />
+                                </TouchableOpacity>
+                              )}
                               <TouchableOpacity 
                                   onPress={() => handleDeleteProgram(program.id)}
                                   style={{ padding: 4 }}
@@ -502,12 +533,19 @@ export default function MonthlyWorkoutLibraryScreen() {
                       <View style={[styles.levelBadge, { backgroundColor: program.levelColor || '#ccff00' }]}>
                         <Text style={styles.levelText}>{program.level || 'General'}</Text>
                       </View>
-                      <TouchableOpacity 
-                          style={styles.shareButton}
-                          onPress={() => handleShareProgram(program)}
-                      >
-                        <MaterialIcons name="share" size={18} color="#3b82f6" />
-                      </TouchableOpacity>
+                      {sharedProgramIds.has(program.id) ? (
+                        <View style={[styles.shareButton, { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, width: 'auto', borderRadius: 12 }]}>
+                          <MaterialIcons name="check-circle" size={16} color="#22c55e" />
+                          <Text style={{ color: '#22c55e', fontSize: 11, fontWeight: '700' }}>Shared</Text>
+                        </View>
+                      ) : (
+                        <TouchableOpacity 
+                            style={styles.shareButton}
+                            onPress={() => handleShareProgram(program)}
+                        >
+                          <MaterialIcons name="share" size={18} color="#3b82f6" />
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity 
                           style={styles.deleteButton}
                           onPress={() => handleDeleteProgram(program.id)}
