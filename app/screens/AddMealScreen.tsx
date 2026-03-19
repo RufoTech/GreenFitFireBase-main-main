@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Platform, StatusBar, TextInput, ScrollView, Image, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Platform, StatusBar, TextInput, ScrollView, Image, ActivityIndicator, Modal, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import firestore from '@react-native-firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PRIMARY = "#ccff00";
 const BG_DARK = "#0d0f06";
@@ -100,7 +101,49 @@ export default function AddMealScreen() {
   const [search, setSearch] = useState("");
   const [addedItems, setAddedItems] = useState<any[]>([]);
   const [isOldUiVisible, setIsOldUiVisible] = useState(false);
+  const [activeMealType, setActiveMealType] = useState<string>("BREAKFAST");
+  
+  // Takvim ve Gün Yönetimi
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
+  const [goalCalories, setGoalCalories] = useState("2400"); // Dinamik kalori hədəfi
+  
+  // Seçilen güne ait öğünler
+  const [dailyMeals, setDailyMeals] = useState<{
+    BREAKFAST: any[];
+    LUNCH: any[];
+    DINNER: any[];
+    SNACKS: any[];
+  }>({
+    BREAKFAST: [],
+    LUNCH: [],
+    DINNER: [],
+    SNACKS: []
+  });
+
   const router = useRouter();
+
+  // Load meals and goal from AsyncStorage when selectedDate changes
+  useEffect(() => {
+    const loadDailyData = async () => {
+      try {
+        const storedMeals = await AsyncStorage.getItem(`meals_${selectedDateStr}`);
+        if (storedMeals) {
+          setDailyMeals(JSON.parse(storedMeals));
+        } else {
+          setDailyMeals({ BREAKFAST: [], LUNCH: [], DINNER: [], SNACKS: [] });
+        }
+
+        const storedGoal = await AsyncStorage.getItem('userGoalCalories');
+        if (storedGoal) {
+          setGoalCalories(storedGoal);
+        }
+      } catch (error) {
+        console.error("Error loading data:", error);
+      }
+    };
+    loadDailyData();
+  }, [selectedDateStr]);
 
   useEffect(() => {
     const fetchFoods = async () => {
@@ -147,8 +190,96 @@ export default function AddMealScreen() {
   };
 
   const handleAdd = (item: any) => {
-    setAddedItems((prev) => [...prev, item]);
+    setAddedItems((prev) => [...prev, item]); // Modal içi sepet (isteğe bağlı kullanılabilir)
+    
+    // Aktif öğüne ekle
+    setDailyMeals(prev => {
+      const updated = {
+        ...prev,
+        [activeMealType]: [...prev[activeMealType as keyof typeof prev], item]
+      };
+      return updated;
+    });
   };
+
+  const handleSaveGoal = async (text: string) => {
+    setGoalCalories(text);
+    try {
+      await AsyncStorage.setItem('userGoalCalories', text);
+    } catch (error) {
+      console.error("Error saving goal calories:", error);
+    }
+  };
+
+  const handleSaveMeals = async () => {
+    try {
+      await AsyncStorage.setItem(`meals_${selectedDateStr}`, JSON.stringify(dailyMeals));
+      Alert.alert("Success", "Meals saved successfully!");
+      setIsOldUiVisible(false);
+      setAddedItems([]); // Modal sepetini sıfırla
+    } catch (error) {
+      console.error("Error saving meals:", error);
+      Alert.alert("Error", "Could not save meals.");
+    }
+  };
+
+  const removeMeal = (mealType: string, index: number) => {
+    setDailyMeals(prev => {
+      const updatedList = [...prev[mealType as keyof typeof prev]];
+      updatedList.splice(index, 1);
+      const updated = { ...prev, [mealType]: updatedList };
+      // Save immediately on remove
+      AsyncStorage.setItem(`meals_${selectedDateStr}`, JSON.stringify(updated)).catch(e => console.log(e));
+      return updated;
+    });
+  };
+
+  const openAddModal = (mealType: string) => {
+    setActiveMealType(mealType);
+    setAddedItems([]); // Modal açılırken sepeti sıfırla (sadece o an eklenenleri saysın diye)
+    setIsOldUiVisible(true);
+  };
+
+  // Dinamik Hesaplamalar
+  const calculateTotal = (key: string) => {
+    let total = 0;
+    Object.values(dailyMeals).forEach(mealList => {
+      mealList.forEach(item => {
+        total += Number(item[key]) || 0;
+      });
+    });
+    return Math.round(total);
+  };
+
+  const calculateMealTotal = (mealList: any[], key: string) => {
+    return Math.round(mealList.reduce((sum, item) => sum + (Number(item[key]) || 0), 0));
+  };
+
+  const totalCalories = calculateTotal('calories');
+  const totalProtein = calculateTotal('protein');
+  const totalCarbs = calculateTotal('carbs');
+  const totalFat = calculateTotal('fat');
+  
+  const GOAL_CALORIES = parseInt(goalCalories) || 2400;
+  const progressPercent = Math.min((totalCalories / GOAL_CALORIES) * 100, 100).toFixed(0);
+
+  // Takvim günlerini oluştur
+  const generateWeekDays = () => {
+    const days = [];
+    for (let i = -3; i <= 3; i++) {
+      const d = new Date(currentDate);
+      d.setDate(currentDate.getDate() + i);
+      days.push({
+        dateObj: d,
+        dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
+        dayNum: d.getDate(),
+        dateStr: d.toISOString().split('T')[0]
+      });
+    }
+    return days;
+  };
+
+  const weekDays = generateWeekDays();
 
 
   return (
@@ -165,21 +296,24 @@ export default function AddMealScreen() {
                 <MaterialIcons name="arrow-back" size={24} color="#f1f5f9" />
             </TouchableOpacity>
             <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>September</Text>
-              <Text style={styles.headerSubtitle}>WEEK 38</Text>
+              <Text style={styles.headerTitle}>{currentDate.toLocaleString('default', { month: 'long' })}</Text>
+              <Text style={styles.headerSubtitle}>WEEK {Math.ceil(currentDate.getDate() / 7)}</Text>
             </View>
             <View style={styles.placeholderButton} />
         </View>
 
         {/* Horizontal Calendar */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.calendarContainer}>
-            {['Mon 14', 'Tue 15', 'Wed 16', 'Thu 17', 'Fri 18', 'Sat 19', 'Sun 20'].map((day, index) => {
-                const [dayName, dayNum] = day.split(' ');
-                const isActive = index === 2; // Wed 16 is active in the design
+            {weekDays.map((dayObj, index) => {
+                const isActive = dayObj.dateStr === selectedDateStr;
                 return (
-                    <TouchableOpacity key={day} style={[styles.dayCard, isActive && styles.dayCardActive]}>
-                        <Text style={[styles.dayName, isActive && styles.dayTextActive]}>{dayName}</Text>
-                        <Text style={[styles.dayNumber, isActive && styles.dayTextActive]}>{dayNum}</Text>
+                    <TouchableOpacity 
+                      key={dayObj.dateStr} 
+                      style={[styles.dayCard, isActive && styles.dayCardActive]}
+                      onPress={() => setSelectedDateStr(dayObj.dateStr)}
+                    >
+                        <Text style={[styles.dayName, isActive && styles.dayTextActive]}>{dayObj.dayName}</Text>
+                        <Text style={[styles.dayNumber, isActive && styles.dayTextActive]}>{dayObj.dayNum}</Text>
                     </TouchableOpacity>
                 );
             })}
@@ -195,18 +329,26 @@ export default function AddMealScreen() {
             <View>
               <Text style={styles.nutritionLabel}>DAILY ENERGY</Text>
               <View style={styles.caloriesRow}>
-                <Text style={styles.caloriesValue}>1,850</Text>
-                <Text style={styles.caloriesTarget}>/ 2,400 kcal</Text>
+                <Text style={styles.caloriesValue}>{totalCalories}</Text>
+                <Text style={styles.caloriesTarget}>/</Text>
+                <TextInput 
+                  style={styles.goalInput}
+                  value={goalCalories}
+                  onChangeText={handleSaveGoal}
+                  keyboardType="numeric"
+                  maxLength={5}
+                />
+                <Text style={styles.caloriesTarget}>kcal</Text>
               </View>
             </View>
             <View style={styles.targetBadge}>
-              <Text style={styles.targetBadgeText}>77% TARGET</Text>
+              <Text style={styles.targetBadgeText}>{progressPercent}% TARGET</Text>
             </View>
           </View>
 
           {/* Main Progress Bar */}
           <View style={styles.mainProgressBarBg}>
-            <View style={[styles.mainProgressBarFill, { width: '77%' }]} />
+            <View style={[styles.mainProgressBarFill, { width: `${progressPercent}%` as any }]} />
           </View>
 
           {/* Macro Breakdown */}
@@ -214,30 +356,30 @@ export default function AddMealScreen() {
             <View style={styles.macroCol}>
               <View style={styles.macroHeader}>
                 <Text style={styles.macroLabel}>PROTEIN</Text>
-                <Text style={styles.macroValue}>142g</Text>
+                <Text style={styles.macroValue}>{totalProtein}g</Text>
               </View>
               <View style={styles.macroBarBg}>
-                <View style={[styles.macroBarFill, { width: '85%', backgroundColor: SECONDARY }]} />
+                <View style={[styles.macroBarFill, { width: `${Math.min((totalProtein / 150) * 100, 100)}%` as any, backgroundColor: SECONDARY }]} />
               </View>
             </View>
 
             <View style={styles.macroCol}>
               <View style={styles.macroHeader}>
                 <Text style={styles.macroLabel}>CARBS</Text>
-                <Text style={styles.macroValue}>190g</Text>
+                <Text style={styles.macroValue}>{totalCarbs}g</Text>
               </View>
               <View style={styles.macroBarBg}>
-                <View style={[styles.macroBarFill, { width: '60%', backgroundColor: TERTIARY }]} />
+                <View style={[styles.macroBarFill, { width: `${Math.min((totalCarbs / 250) * 100, 100)}%` as any, backgroundColor: TERTIARY }]} />
               </View>
             </View>
 
             <View style={styles.macroCol}>
               <View style={styles.macroHeader}>
                 <Text style={styles.macroLabel}>FATS</Text>
-                <Text style={styles.macroValue}>58g</Text>
+                <Text style={styles.macroValue}>{totalFat}g</Text>
               </View>
               <View style={styles.macroBarBg}>
-                <View style={[styles.macroBarFill, { width: '45%', backgroundColor: TEXT_MUTED }]} />
+                <View style={[styles.macroBarFill, { width: `${Math.min((totalFat / 80) * 100, 100)}%` as any, backgroundColor: TEXT_MUTED }]} />
               </View>
             </View>
           </View>
@@ -250,106 +392,184 @@ export default function AddMealScreen() {
           <View style={styles.mealSection}>
             <View style={styles.mealSectionHeader}>
               <View style={styles.mealSectionTitleRow}>
-                <View style={styles.mealSectionIndicator} />
-                <Text style={styles.mealSectionTitle}>BREAKFAST</Text>
+                <View style={[styles.mealSectionIndicator, { backgroundColor: dailyMeals.BREAKFAST.length > 0 ? PRIMARY : 'rgba(204,255,0,0.2)' }]} />
+                <Text style={[styles.mealSectionTitle, { opacity: dailyMeals.BREAKFAST.length > 0 ? 1 : 0.4 }]}>BREAKFAST</Text>
               </View>
-              <Text style={styles.mealSectionCalories}>480 KCAL</Text>
+              <Text style={[styles.mealSectionCalories, { opacity: dailyMeals.BREAKFAST.length > 0 ? 1 : 0.4 }]}>
+                {calculateMealTotal(dailyMeals.BREAKFAST, 'calories')} KCAL
+              </Text>
             </View>
 
-            <View style={styles.mealSectionItems}>
-              <View style={styles.newMealItem}>
-                <Image source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBivQBxEF8qR4pORVRyzVfkpD-Ajx1cEiHkgC1v1dkS0RXsOfdpMDaANGyUN1kIroRveauJvJfU9QXZRBoWL7m1_IF-lZN9BnFrpZnFHIzO9dTt4t1pBsyTJvE6CFqGh6kV8dilbl82u_0ExvDT9S48D9JSJXqyd2UERkclF_3AykevQPc_RZoe3MQVdo-cs74S7F2LSNcWcYXBmpBaiWfgeLUVJaL2Lpmta85a8HQgXu0kUO_FTs0PnbfvJttm2GpQRPkRFZsOYgM' }} style={styles.newMealImage} />
-                <View style={styles.newMealInfo}>
-                  <Text style={styles.newMealName} numberOfLines={1}>AVOCADO SOURDOUGH TOAST</Text>
-                  <Text style={styles.newMealMacros}>P: 12G • C: 42G • F: 18G</Text>
-                </View>
-                <View style={styles.newMealCals}>
-                  <Text style={styles.newMealCalsValue}>345</Text>
-                  <Text style={styles.newMealCalsLabel}>KCAL</Text>
-                </View>
+            {dailyMeals.BREAKFAST.length > 0 ? (
+              <View style={styles.mealSectionItems}>
+                {dailyMeals.BREAKFAST.map((item, index) => (
+                  <View key={index} style={styles.newMealItem}>
+                    <Image source={{ uri: item.image || item.imageUrl || 'https://via.placeholder.com/150' }} style={styles.newMealImage} />
+                    <View style={styles.newMealInfo}>
+                      <Text style={styles.newMealName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.newMealMacros}>P: {item.protein || 0}G • C: {item.carbs || 0}G • F: {item.fat || 0}G</Text>
+                    </View>
+                    <View style={styles.newMealCals}>
+                      <Text style={styles.newMealCalsValue}>{item.calories || 0}</Text>
+                      <Text style={styles.newMealCalsLabel}>KCAL</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => removeMeal('BREAKFAST', index)} style={{ padding: 8, marginLeft: 8 }}>
+                      <MaterialIcons name="close" size={20} color={TEXT_MUTED} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                <TouchableOpacity style={[styles.addSnackButton, { alignSelf: 'flex-start', marginTop: 8 }]} onPress={() => openAddModal('BREAKFAST')}>
+                  <MaterialIcons name="add-circle" size={18} color={PRIMARY} />
+                  <Text style={styles.addSnackText}>ADD MORE</Text>
+                </TouchableOpacity>
               </View>
-
-              <View style={styles.newMealItem}>
-                <Image source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAzt5Dxr96BEs2-OM07OiwQl09_tf-Rofdq7QC5sGDKyn_5d01QRt1LP0G-ptSdTg1Y2LTsU8bQCNzmuHAhLnLJ9jF_ak0uP1f9nR5jIId3sfGsf6Accp-r9Wb4wSfbqi2NvO0gT6vAlrfy6Wzp3_BgefrA0JPba85cvQAei-sW6vxODpMbHTOKSuPE5BVjdy9oFvXInR0ddp-yNRRMgx38AK4fGKPQ0aqhfsncWzFi4iD2R8BVS6vL93RieSsNkVKNKoi8FrbeMM8' }} style={styles.newMealImage} />
-                <View style={styles.newMealInfo}>
-                  <Text style={styles.newMealName} numberOfLines={1}>OAT MILK LATTE</Text>
-                  <Text style={styles.newMealMacros}>P: 4G • C: 12G • F: 5G</Text>
-                </View>
-                <View style={styles.newMealCals}>
-                  <Text style={styles.newMealCalsValue}>135</Text>
-                  <Text style={styles.newMealCalsLabel}>KCAL</Text>
-                </View>
+            ) : (
+              <View style={styles.emptySnacksContainer}>
+                <Text style={styles.emptySnacksText}>NO BREAKFAST LOGGED YET</Text>
+                <TouchableOpacity style={styles.addSnackButton} onPress={() => openAddModal('BREAKFAST')}>
+                  <MaterialIcons name="add-circle" size={18} color={PRIMARY} />
+                  <Text style={styles.addSnackText}>ADD BREAKFAST</Text>
+                </TouchableOpacity>
               </View>
-            </View>
+            )}
           </View>
 
           {/* Lunch */}
           <View style={styles.mealSection}>
             <View style={styles.mealSectionHeader}>
               <View style={styles.mealSectionTitleRow}>
-                <View style={styles.mealSectionIndicator} />
-                <Text style={styles.mealSectionTitle}>LUNCH</Text>
+                <View style={[styles.mealSectionIndicator, { backgroundColor: dailyMeals.LUNCH.length > 0 ? PRIMARY : 'rgba(204,255,0,0.2)' }]} />
+                <Text style={[styles.mealSectionTitle, { opacity: dailyMeals.LUNCH.length > 0 ? 1 : 0.4 }]}>LUNCH</Text>
               </View>
-              <Text style={styles.mealSectionCalories}>720 KCAL</Text>
+              <Text style={[styles.mealSectionCalories, { opacity: dailyMeals.LUNCH.length > 0 ? 1 : 0.4 }]}>
+                {calculateMealTotal(dailyMeals.LUNCH, 'calories')} KCAL
+              </Text>
             </View>
 
-            <View style={styles.mealSectionItems}>
-              <View style={[styles.newMealItem, { borderLeftWidth: 4, borderLeftColor: 'rgba(204,255,0,0.4)' }]}>
-                <Image source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDtEN5Htwbx6cHZhA34XRhx8pCjf0ZdCXoDDSFlixbxnFQVjxC93TPqcD2YgER8AgXQsgdj10rdipIsms7gBoE-QiT0ojZ7oqLJnWKXmSCCKL7iIphvtGQfPtKAQn2kfvQ9PhqVit1oeM5uVTWF0PmrHOqIkYTk1XZzw0H64PaIaBnAZgo4Lh_WEg_5FAiGYmUkyYwsQB7Eq5Pu6PkiISruUefR3v-3L5gmG7LZcM13_q3PskHZEKIFbMcHKDvx05grGGIvx4Sh70U' }} style={styles.newMealImage} />
-                <View style={styles.newMealInfo}>
-                  <Text style={styles.newMealName} numberOfLines={1}>QUINOA & GRILLED CHICKEN</Text>
-                  <Text style={styles.newMealMacros}>P: 48G • C: 55G • F: 12G</Text>
-                </View>
-                <View style={styles.newMealCals}>
-                  <Text style={styles.newMealCalsValue}>720</Text>
-                  <Text style={styles.newMealCalsLabel}>KCAL</Text>
-                </View>
+            {dailyMeals.LUNCH.length > 0 ? (
+              <View style={styles.mealSectionItems}>
+                {dailyMeals.LUNCH.map((item, index) => (
+                  <View key={index} style={[styles.newMealItem, { borderLeftWidth: 4, borderLeftColor: 'rgba(204,255,0,0.4)' }]}>
+                    <Image source={{ uri: item.image || item.imageUrl || 'https://via.placeholder.com/150' }} style={styles.newMealImage} />
+                    <View style={styles.newMealInfo}>
+                      <Text style={styles.newMealName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.newMealMacros}>P: {item.protein || 0}G • C: {item.carbs || 0}G • F: {item.fat || 0}G</Text>
+                    </View>
+                    <View style={styles.newMealCals}>
+                      <Text style={styles.newMealCalsValue}>{item.calories || 0}</Text>
+                      <Text style={styles.newMealCalsLabel}>KCAL</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => removeMeal('LUNCH', index)} style={{ padding: 8, marginLeft: 8 }}>
+                      <MaterialIcons name="close" size={20} color={TEXT_MUTED} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                <TouchableOpacity style={[styles.addSnackButton, { alignSelf: 'flex-start', marginTop: 8 }]} onPress={() => openAddModal('LUNCH')}>
+                  <MaterialIcons name="add-circle" size={18} color={PRIMARY} />
+                  <Text style={styles.addSnackText}>ADD MORE</Text>
+                </TouchableOpacity>
               </View>
-            </View>
+            ) : (
+              <View style={styles.emptySnacksContainer}>
+                <Text style={styles.emptySnacksText}>NO LUNCH LOGGED YET</Text>
+                <TouchableOpacity style={styles.addSnackButton} onPress={() => openAddModal('LUNCH')}>
+                  <MaterialIcons name="add-circle" size={18} color={PRIMARY} />
+                  <Text style={styles.addSnackText}>ADD LUNCH</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           {/* Dinner */}
           <View style={styles.mealSection}>
             <View style={styles.mealSectionHeader}>
               <View style={styles.mealSectionTitleRow}>
-                <View style={styles.mealSectionIndicator} />
-                <Text style={styles.mealSectionTitle}>DINNER</Text>
+                <View style={[styles.mealSectionIndicator, { backgroundColor: dailyMeals.DINNER.length > 0 ? PRIMARY : 'rgba(204,255,0,0.2)' }]} />
+                <Text style={[styles.mealSectionTitle, { opacity: dailyMeals.DINNER.length > 0 ? 1 : 0.4 }]}>DINNER</Text>
               </View>
-              <Text style={styles.mealSectionCalories}>650 KCAL</Text>
+              <Text style={[styles.mealSectionCalories, { opacity: dailyMeals.DINNER.length > 0 ? 1 : 0.4 }]}>
+                {calculateMealTotal(dailyMeals.DINNER, 'calories')} KCAL
+              </Text>
             </View>
 
-            <View style={styles.mealSectionItems}>
-              <View style={styles.newMealItem}>
-                <Image source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBtcl-0pLlzMUQvB7Tzidz9Ml_TH6eAi9_qxzkv_t0wx3LQD08vf8Fsom9KAC5jmKT45LOokyJaa3PruKT6Ej5DqCoahFWbAlw6d1EHfaTe1Urd09vLZsdCVLvAyAZ7TiBOjzYcEpuLc_V4mWcTrJ0JuUkC90vC_1tS1cWpiFLgNzOFGeqP8lqJDFBYrnSmRBhD1TyWsZex_3r2i9ouhtuiR07TJnjSXM-2EgYMx1HrywXAECGV5EmGTyLV5h5v3t0PZK5Mpxrw1kE' }} style={styles.newMealImage} />
-                <View style={styles.newMealInfo}>
-                  <Text style={styles.newMealName} numberOfLines={1}>ROASTED SALMON & ASPARAGUS</Text>
-                  <Text style={styles.newMealMacros}>P: 38G • C: 20G • F: 28G</Text>
-                </View>
-                <View style={styles.newMealCals}>
-                  <Text style={styles.newMealCalsValue}>650</Text>
-                  <Text style={styles.newMealCalsLabel}>KCAL</Text>
-                </View>
+            {dailyMeals.DINNER.length > 0 ? (
+              <View style={styles.mealSectionItems}>
+                {dailyMeals.DINNER.map((item, index) => (
+                  <View key={index} style={styles.newMealItem}>
+                    <Image source={{ uri: item.image || item.imageUrl || 'https://via.placeholder.com/150' }} style={styles.newMealImage} />
+                    <View style={styles.newMealInfo}>
+                      <Text style={styles.newMealName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.newMealMacros}>P: {item.protein || 0}G • C: {item.carbs || 0}G • F: {item.fat || 0}G</Text>
+                    </View>
+                    <View style={styles.newMealCals}>
+                      <Text style={styles.newMealCalsValue}>{item.calories || 0}</Text>
+                      <Text style={styles.newMealCalsLabel}>KCAL</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => removeMeal('DINNER', index)} style={{ padding: 8, marginLeft: 8 }}>
+                      <MaterialIcons name="close" size={20} color={TEXT_MUTED} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                <TouchableOpacity style={[styles.addSnackButton, { alignSelf: 'flex-start', marginTop: 8 }]} onPress={() => openAddModal('DINNER')}>
+                  <MaterialIcons name="add-circle" size={18} color={PRIMARY} />
+                  <Text style={styles.addSnackText}>ADD MORE</Text>
+                </TouchableOpacity>
               </View>
-            </View>
+            ) : (
+              <View style={styles.emptySnacksContainer}>
+                <Text style={styles.emptySnacksText}>NO DINNER LOGGED YET</Text>
+                <TouchableOpacity style={styles.addSnackButton} onPress={() => openAddModal('DINNER')}>
+                  <MaterialIcons name="add-circle" size={18} color={PRIMARY} />
+                  <Text style={styles.addSnackText}>ADD DINNER</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
-          {/* Snacks (Empty State) */}
+          {/* Snacks */}
           <View style={styles.mealSection}>
             <View style={styles.mealSectionHeader}>
               <View style={styles.mealSectionTitleRow}>
-                <View style={[styles.mealSectionIndicator, { backgroundColor: 'rgba(204,255,0,0.2)' }]} />
-                <Text style={[styles.mealSectionTitle, { opacity: 0.4 }]}>SNACKS</Text>
+                <View style={[styles.mealSectionIndicator, { backgroundColor: dailyMeals.SNACKS.length > 0 ? PRIMARY : 'rgba(204,255,0,0.2)' }]} />
+                <Text style={[styles.mealSectionTitle, { opacity: dailyMeals.SNACKS.length > 0 ? 1 : 0.4 }]}>SNACKS</Text>
               </View>
-              <Text style={[styles.mealSectionCalories, { opacity: 0.4 }]}>0 KCAL</Text>
+              <Text style={[styles.mealSectionCalories, { opacity: dailyMeals.SNACKS.length > 0 ? 1 : 0.4 }]}>
+                {calculateMealTotal(dailyMeals.SNACKS, 'calories')} KCAL
+              </Text>
             </View>
 
-            <View style={styles.emptySnacksContainer}>
-              <Text style={styles.emptySnacksText}>NO SNACKS LOGGED YET</Text>
-              <TouchableOpacity style={styles.addSnackButton}>
-                <MaterialIcons name="add-circle" size={18} color={PRIMARY} />
-                <Text style={styles.addSnackText}>ADD SNACK</Text>
-              </TouchableOpacity>
-            </View>
+            {dailyMeals.SNACKS.length > 0 ? (
+              <View style={styles.mealSectionItems}>
+                {dailyMeals.SNACKS.map((item, index) => (
+                  <View key={index} style={styles.newMealItem}>
+                    <Image source={{ uri: item.image || item.imageUrl || 'https://via.placeholder.com/150' }} style={styles.newMealImage} />
+                    <View style={styles.newMealInfo}>
+                      <Text style={styles.newMealName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.newMealMacros}>P: {item.protein || 0}G • C: {item.carbs || 0}G • F: {item.fat || 0}G</Text>
+                    </View>
+                    <View style={styles.newMealCals}>
+                      <Text style={styles.newMealCalsValue}>{item.calories || 0}</Text>
+                      <Text style={styles.newMealCalsLabel}>KCAL</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => removeMeal('SNACKS', index)} style={{ padding: 8, marginLeft: 8 }}>
+                      <MaterialIcons name="close" size={20} color={TEXT_MUTED} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                <TouchableOpacity style={[styles.addSnackButton, { alignSelf: 'flex-start', marginTop: 8 }]} onPress={() => openAddModal('SNACKS')}>
+                  <MaterialIcons name="add-circle" size={18} color={PRIMARY} />
+                  <Text style={styles.addSnackText}>ADD MORE</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.emptySnacksContainer}>
+                <Text style={styles.emptySnacksText}>NO SNACKS LOGGED YET</Text>
+                <TouchableOpacity style={styles.addSnackButton} onPress={() => openAddModal('SNACKS')}>
+                  <MaterialIcons name="add-circle" size={18} color={PRIMARY} />
+                  <Text style={styles.addSnackText}>ADD SNACK</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
         </View>
@@ -461,13 +681,10 @@ export default function AddMealScreen() {
                 <TouchableOpacity 
                     style={styles.oldCustomMealButton} 
                     activeOpacity={0.9}
-                    onPress={() => {
-                        setIsOldUiVisible(false);
-                        router.push('/screens/AddCustomMealScreen');
-                    }}
+                    onPress={handleSaveMeals}
                 >
-                    <MaterialIcons name="add-circle" size={24} color="#1f230f" />
-                    <Text style={styles.oldCustomMealText}>Add Custom Meal</Text>
+                    <MaterialIcons name="save" size={24} color="#1f230f" />
+                    <Text style={styles.oldCustomMealText}>Save Meals</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -611,6 +828,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: TEXT_MUTED,
+  },
+  goalInput: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: PRIMARY,
+    backgroundColor: 'rgba(204,255,0,0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    minWidth: 60,
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(204,255,0,0.3)',
+    borderStyle: 'dashed',
   },
   targetBadge: {
     backgroundColor: 'rgba(204, 255, 0, 0.1)',
