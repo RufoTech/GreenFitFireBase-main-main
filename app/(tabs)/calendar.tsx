@@ -306,11 +306,6 @@ export default function CalendarScreen() {
         <View style={{ height: 100 }} />
 
       </ScrollView>
-
-      {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab} activeOpacity={0.9}>
-        <MaterialIcons name="add" size={32} color={BG_DARK} />
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -590,21 +585,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     color: BG_DARK,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: PRIMARY,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
   },
 });
