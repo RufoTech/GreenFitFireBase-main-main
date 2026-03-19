@@ -181,7 +181,26 @@ export default function CommunityMarketplaceScreen() {
       : `${item.duration || 0} Min • ${item.targetMuscle || 'Full Body'}`;
 
     return (
-      <View style={styles.card}>
+      <TouchableOpacity 
+        style={styles.card}
+        activeOpacity={0.9}
+        onPress={() => {
+          if (isProgram) {
+            // Can be extended later if needed, but for now user just mentioned "Workouts" tab
+            // router.push({ pathname: '/screens/WeeklyProgramScreen', params: { programId: item.originalId || item.id } });
+          } else {
+            router.push({
+              pathname: '/screens/WorkoutDetailsScreen',
+              params: {
+                id: item.originalId || item.id, // community shared workouts store originalId
+                isCustom: 'true', // shared workouts are custom
+                fromLibrary: 'true', // hide share options
+                hideAddToDay: 'true'
+              }
+            });
+          }
+        }}
+      >
         <ImageBackground
           source={{ uri: item.coverImage || 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2070&auto=format&fit=crop' }}
           style={styles.cardImage}
@@ -243,7 +262,7 @@ export default function CommunityMarketplaceScreen() {
             </View>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
