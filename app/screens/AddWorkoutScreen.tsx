@@ -107,11 +107,11 @@ export default function AddWorkoutScreen() {
                     title: data.name || data.title || 'Custom Workout',
                     duration: data.duration || '0',
                     exercises: data.exerciseCount || (data.exercises ? data.exercises.reduce((acc: number, block: any) => acc + (block.sets ? block.sets.reduce((sAcc: number, set: any) => sAcc + (set.movements ? set.movements.length : 0), 0) : 0), 0) : 0),
-                    level: data.level || 'Custom',
+                    level: data.level || data.difficulty || 'Custom',
                     levelColor: '#ccff00', // Green for custom
-                    image: data.image || 'https://via.placeholder.com/300',
+                    image: data.image || data.coverImage || 'https://via.placeholder.com/300',
                     category: 'Custom',
-                    targetMuscle: data.target || 'Full Body'
+                    targetMuscle: data.target || data.targetMuscle || 'Full Body'
                   });
                   fetchedCategories.add('Custom');
                 });

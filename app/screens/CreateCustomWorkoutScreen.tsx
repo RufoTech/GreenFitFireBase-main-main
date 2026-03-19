@@ -18,7 +18,8 @@ import {
     TextInput,
     TouchableOpacity,
     TouchableWithoutFeedback,
-    View
+    View,
+    ActivityIndicator
 } from 'react-native';
 import { SelectionStore } from '../utils/SelectionStore';
 
@@ -130,16 +131,54 @@ export default function CreateCustomWorkoutScreen() {
     }, [selectionContext])
   );
 
-  const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 1,
-    });
+  const [isUploading, setIsUploading] = useState(false);
 
-    if (!result.canceled) {
-      setCoverImage(result.assets[0].uri);
+  const pickImage = async () => {
+    try {
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const uri = result.assets[0].uri;
+      if (!uri) return;
+      setIsUploading(true);
+      
+      try {
+        const formData = new FormData();
+        formData.append('file', {
+          uri: uri,
+          type: 'image/jpeg',
+          name: 'upload.jpg',
+        } as any);
+        formData.append('upload_preset', 'ml_default');
+
+        const response = await fetch('https://api.cloudinary.com/v1_1/dplgyvrof/image/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await response.json();
+        
+        if (data.secure_url) {
+          setCoverImage(data.secure_url);
+        } else {
+          Alert.alert("Upload Error", "Failed to get image URL from Cloudinary.");
+        }
+      } catch (error) {
+        console.error("Cloudinary upload error:", error);
+        Alert.alert("Upload Error", "Could not upload image to Cloudinary.");
+      } finally {
+        setIsUploading(false);
+      }
+    } catch (err) {
+      console.warn("Image picker error:", err);
     }
   };
 
@@ -404,8 +443,13 @@ export default function CreateCustomWorkoutScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Program Details</Text>
           
-          <TouchableOpacity style={styles.addImageContainer} onPress={pickImage}>
-            {coverImage ? (
+          <TouchableOpacity style={styles.addImageContainer} onPress={pickImage} disabled={isUploading}>
+            {isUploading ? (
+              <View style={styles.addImagePlaceholder}>
+                <ActivityIndicator size="large" color="#ccff00" />
+                <Text style={styles.addImageText}>Uploading...</Text>
+              </View>
+            ) : coverImage ? (
               <Image source={{ uri: coverImage }} style={{ width: '100%', height: '100%' }} />
             ) : (
               <View style={styles.addImagePlaceholder}>
