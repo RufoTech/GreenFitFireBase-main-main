@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,10 @@ import {
   Platform
 } from 'react-native';
 import { MaterialIcons, Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 
 const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
 
@@ -32,9 +33,11 @@ export default function CommunityMarketplaceScreen() {
 
   const currentUser = auth().currentUser;
 
-  useEffect(() => {
-    fetchCommunityItems();
-  }, [activeTab]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchCommunityItems();
+    }, [activeTab])
+  );
 
   const fetchCommunityItems = async () => {
     setLoading(true);
@@ -57,8 +60,33 @@ export default function CommunityMarketplaceScreen() {
         throw new Error('Failed to fetch items');
       }
 
-      const fetchedItems = await response.json();
-      setItems(fetchedItems || []);
+      let fetchedItems = await response.json() || [];
+
+      // Check owned status
+      try {
+        const collectionName = activeTab === 'programs' ? 'user_programs' : 'customUserWorkouts';
+        const snapshot = await firestore()
+          .collection(collectionName)
+          .where('userId', '==', user.uid)
+          .get();
+        
+        const downloadedIds = new Set();
+        snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.communityItemId) {
+                downloadedIds.add(data.communityItemId);
+            }
+        });
+
+        fetchedItems = fetchedItems.map((item: any) => ({
+            ...item,
+            isDownloaded: downloadedIds.has(item.id)
+        }));
+      } catch (err) {
+        console.error("Error checking downloaded items:", err);
+      }
+
+      setItems(fetchedItems);
     } catch (error) {
       console.error("Error fetching community items:", error);
       Alert.alert("Error", "Could not load community items.");
@@ -93,8 +121,8 @@ export default function CommunityMarketplaceScreen() {
       }
 
       Alert.alert("Success", `${activeTab === 'programs' ? 'Program' : 'Workout'} downloaded to your library!`);
-      // Update local state to show incremented downloads
-      setItems(prev => prev.map(i => i.id === item.id ? { ...i, downloads: (i.downloads || 0) + 1 } : i));
+      // Update local state to show incremented downloads and mark as downloaded locally
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, downloads: (i.downloads || 0) + 1, isDownloaded: true } : i));
     } catch (error) {
       console.error("Error downloading item:", error);
       Alert.alert("Error", "Could not download the item.");
@@ -197,9 +225,9 @@ export default function CommunityMarketplaceScreen() {
               )}
               
               <TouchableOpacity 
-                style={[styles.downloadButton, item.authorId === currentUser?.uid && { opacity: 0.5 }]}
+                style={[styles.downloadButton, (item.authorId === currentUser?.uid || item.isDownloaded) && { opacity: 0.5 }]}
                 onPress={() => handleDownload(item)}
-                disabled={downloadingId === item.id || item.authorId === currentUser?.uid}
+                disabled={downloadingId === item.id || item.authorId === currentUser?.uid || item.isDownloaded}
               >
                 {downloadingId === item.id ? (
                   <ActivityIndicator size="small" color="#1f230f" />
@@ -207,7 +235,7 @@ export default function CommunityMarketplaceScreen() {
                   <>
                     <Feather name="download" size={16} color="#1f230f" />
                     <Text style={styles.downloadButtonText}>
-                      {item.authorId === currentUser?.uid ? 'Owned' : 'Get'}
+                      {item.authorId === currentUser?.uid || item.isDownloaded ? 'Owned' : 'Get'}
                     </Text>
                   </>
                 )}

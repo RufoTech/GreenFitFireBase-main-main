@@ -716,10 +716,11 @@ func downloadCommunityProgramHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Clone to user_programs
 	newProgramData := map[string]interface{}{
-		"userId":        uid,
-		"name":          data["title"],
-		"focus":         data["focus"],
-		"coverImage":    data["coverImage"],
+		"userId":          uid,
+		"communityItemId": payload.ItemId,
+		"name":            data["title"],
+		"focus":           data["focus"],
+		"coverImage":      data["coverImage"],
 		"workoutCount":  data["workoutCount"],
 		"totalDuration": data["totalDuration"],
 		"difficulty":    "Custom",
@@ -802,10 +803,11 @@ func downloadCommunityWorkoutHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Clone to customUserWorkouts
 	newWorkoutData := map[string]interface{}{
-		"userId":       uid,
-		"name":         data["title"],
-		"coverImage":   data["coverImage"],
-		"difficulty":   data["difficulty"],
+		"userId":          uid,
+		"communityItemId": payload.ItemId,
+		"name":            data["title"],
+		"coverImage":      data["coverImage"],
+		"difficulty":      data["difficulty"],
 		"duration":     data["duration"],
 		"targetMuscle": data["targetMuscle"],
 		"exercises":    data["exercises"],
