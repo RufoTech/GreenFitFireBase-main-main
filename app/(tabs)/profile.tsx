@@ -113,7 +113,11 @@ export default function ProfileScreen() {
             title="Achievements" 
             onPress={() => router.push('/screens/AchievementsScreen')}
           />
-          <MenuItem icon="notifications" title="Notifications" />
+          <MenuItem 
+            icon="group" 
+            title="Friends" 
+            onPress={() => {}} // You can add the navigation route here later
+          />
           <MenuItem 
             icon="help" 
             title="Help & Support" 
