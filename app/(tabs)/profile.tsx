@@ -67,13 +67,7 @@ export default function ProfileScreen() {
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerButton}>
-          <MaterialIcons name="settings" size={24} color="#ffffff" />
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity style={styles.headerButton}>
-          <MaterialIcons name="share" size={24} color="#ffffff" />
-        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -98,22 +92,6 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCard, styles.statCardNormal]}>
-            <Text style={styles.statValue}>128</Text>
-            <Text style={styles.statLabel}>Workouts</Text>
-          </View>
-          <View style={[styles.statCard, styles.statCardHighlight]}>
-            <Text style={styles.statValue}>2.4k</Text>
-            <Text style={styles.statLabel}>Points</Text>
-          </View>
-          <View style={[styles.statCard, styles.statCardNormal]}>
-            <Text style={styles.statValue}>856</Text>
-            <Text style={styles.statLabel}>Followers</Text>
-          </View>
-        </View>
-
         {/* Menu List */}
         <View style={styles.menuContainer}>
           <Text style={styles.menuHeader}>ACCOUNT SETTINGS</Text>
@@ -123,11 +101,17 @@ export default function ProfileScreen() {
             title="Personal Information" 
             onPress={() => router.push('/screens/PersonalDataScreen')} 
           />
-          <MenuItem icon="fitness-center" title="My Programs" />
-          <MenuItem icon="emoji-events" title="Achievements" />
+          <MenuItem 
+            icon="emoji-events" 
+            title="Achievements" 
+            onPress={() => router.push('/screens/AchievementsScreen')}
+          />
           <MenuItem icon="notifications" title="Notifications" />
-          <MenuItem icon="settings" title="Settings" />
-          <MenuItem icon="help" title="Help & Support" />
+          <MenuItem 
+            icon="help" 
+            title="Help & Support" 
+            onPress={() => router.push('/screens/FAQScreen')}
+          />
           
           <View style={styles.divider} />
           
@@ -156,7 +140,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
@@ -168,12 +152,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   content: {
     // paddingHorizontal: 16,
@@ -223,41 +201,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   userJoined: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: '#94a3b8',
     fontSize: 14,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 12,
-    marginBottom: 32,
-  },
-  statCard: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  statCardNormal: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  statCardHighlight: {
-    backgroundColor: 'rgba(204, 255, 0, 0.2)',
-    borderColor: 'rgba(204, 255, 0, 0.3)',
-  },
-  statValue: {
-    color: '#ccff00',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  statLabel: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 12,
-    fontWeight: '500',
   },
   menuContainer: {
     paddingHorizontal: 16,

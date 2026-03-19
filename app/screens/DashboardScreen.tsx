@@ -434,36 +434,6 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Recent Activity */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: currentTheme.subtext }]}>RECENT ACTIVITY</Text>
-          <View style={styles.activityContainer}>
-            
-            <View style={[styles.activityCard, { backgroundColor: isDark ? currentTheme.cardBg : '#ffffff', borderColor: isDark ? currentTheme.cardBorder : '#e2e8f0' }]}>
-              <View style={[styles.activityIcon, { backgroundColor: 'rgba(204, 255, 0, 0.2)' }]}>
-                <MaterialIcons name="directions-run" size={20} color={isDark ? '#ccff00' : '#65a30d'} />
-              </View>
-              <View style={styles.activityInfo}>
-                <Text style={[styles.activityTitle, { color: currentTheme.text }]}>Morning Run</Text>
-                <Text style={[styles.activitySubtitle, { color: currentTheme.subtext }]}>5.2 km • 28 mins</Text>
-              </View>
-              <Text style={[styles.activityTime, { color: currentTheme.subtext }]}>2h ago</Text>
-            </View>
-
-            <View style={[styles.activityCard, { backgroundColor: isDark ? currentTheme.cardBg : '#ffffff', borderColor: isDark ? currentTheme.cardBorder : '#e2e8f0' }]}>
-              <View style={[styles.activityIcon, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)' }]}>
-                <Feather name="moon" size={20} color="#3b82f6" />
-              </View>
-              <View style={styles.activityInfo}>
-                <Text style={[styles.activityTitle, { color: currentTheme.text }]}>Sleep Score</Text>
-                <Text style={[styles.activitySubtitle, { color: currentTheme.subtext }]}>82/100 • 7h 45m</Text>
-              </View>
-              <Text style={[styles.activityTime, { color: currentTheme.subtext }]}>8h ago</Text>
-            </View>
-
-          </View>
-        </View>
-
         {/* Bottom Padding for TabBar */}
         <View style={{ height: 100 }} />
 
@@ -781,40 +751,6 @@ const styles = StyleSheet.create({
     color: '#1f230f',
     fontSize: 14,
     fontWeight: 'bold',
-  },
-  activityContainer: {
-    gap: 16,
-  },
-  activityCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 16,
-  },
-  activityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  activityInfo: {
-    flex: 1,
-  },
-  activityTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  activitySubtitle: {
-    fontSize: 12,
-    fontWeight: '400',
-  },
-  activityTime: {
-    fontSize: 12,
-    fontWeight: '400',
   },
   bottomNav: {
     position: 'absolute',
