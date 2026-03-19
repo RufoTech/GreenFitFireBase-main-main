@@ -88,6 +88,29 @@ export default function DashboardScreen() {
 
   const [activeProgram, setActiveProgram] = useState<any>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [dailyTips, setDailyTips] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchDailyTips = async () => {
+      try {
+        const tipsSnapshot = await firestore()
+          .collection('dailyTips')
+          .limit(5)
+          .get();
+        
+        const tips = tipsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        setDailyTips(tips);
+      } catch (error) {
+        console.error("Error fetching daily tips:", error);
+      }
+    };
+
+    fetchDailyTips();
+  }, []);
 
   const handleRemoveProgram = async () => {
     if (!user) return;
@@ -433,6 +456,38 @@ export default function DashboardScreen() {
             </ImageBackground>
           </TouchableOpacity>
         </View>
+
+        {/* Pro Tips Section */}
+        {dailyTips.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitleLarge, { color: currentTheme.text }]}>
+                Pro Tips
+              </Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tipsContainer}>
+              {dailyTips.map(tip => (
+                <View key={tip.id} style={[styles.tipCard, { backgroundColor: isDark ? currentTheme.cardBg : '#ffffff', borderColor: isDark ? currentTheme.cardBorder : '#e2e8f0' }]}>
+                  {tip.image ? (
+                    <Image source={{ uri: tip.image }} style={styles.tipImage} />
+                  ) : (
+                    <View style={[styles.tipImagePlaceholder, { backgroundColor: isDark ? '#1e293b' : '#e2e8f0' }]}>
+                      <MaterialCommunityIcons name="lightbulb-on" size={32} color={currentTheme.primary} />
+                    </View>
+                  )}
+                  <View style={styles.tipContent}>
+                    <Text style={[styles.tipTitle, { color: currentTheme.text }]} numberOfLines={2}>
+                      {tip.title}
+                    </Text>
+                    <Text style={[styles.tipDescription, { color: currentTheme.subtext }]} numberOfLines={3}>
+                      {tip.description}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Bottom Padding for TabBar */}
         <View style={{ height: 100 }} />
@@ -852,5 +907,38 @@ const styles = StyleSheet.create({
     color: '#ccff00',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  tipsContainer: {
+    gap: 16,
+    paddingBottom: 8,
+  },
+  tipCard: {
+    width: 240,
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  tipImage: {
+    width: '100%',
+    height: 120,
+    resizeMode: 'cover',
+  },
+  tipImagePlaceholder: {
+    width: '100%',
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tipContent: {
+    padding: 16,
+  },
+  tipTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  tipDescription: {
+    fontSize: 12,
+    lineHeight: 18,
   },
 });
