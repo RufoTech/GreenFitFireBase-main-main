@@ -285,9 +285,9 @@ export default function WorkoutDetailsScreen() {
                 authorName: user.displayName || user.email || 'Anonymous User',
                 title: workout.name,
                 coverImage: workout.coverImage || null,
-                difficulty: workout.difficulty || 'Intermediate',
-                duration: workout.duration || 30,
-                targetMuscle: workout.targetMuscle || 'Full Body',
+                difficulty: workout.level || 'Intermediate',
+                duration: parseInt(workout.duration, 10) || 30,
+                targetMuscle: Array.isArray(workout.targetMuscles) ? workout.targetMuscles.join(', ') : (workout.targetMuscles || 'Full Body'),
                 exercises: workout.exercises || [],
               };
 

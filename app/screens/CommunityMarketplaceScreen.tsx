@@ -28,6 +28,7 @@ export default function CommunityMarketplaceScreen() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const currentUser = auth().currentUser;
 
@@ -102,6 +103,49 @@ export default function CommunityMarketplaceScreen() {
     }
   };
 
+  const handleDelete = (item: any) => {
+    Alert.alert(
+      "Confirm Delete",
+      "Are you sure you want to delete this from the community?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive",
+          onPress: async () => {
+             if (!currentUser) return;
+             setDeletingId(item.id);
+             try {
+                const token = await currentUser.getIdToken();
+                const endpoint = activeTab === 'programs' ? '/api/community/delete-program' : '/api/community/delete-workout';
+                
+                const response = await fetch(`${API_URL}${endpoint}`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ itemId: item.id })
+                });
+
+                if (!response.ok) {
+                  throw new Error('Failed to delete item');
+                }
+
+                setItems(prev => prev.filter(i => i.id !== item.id));
+                Alert.alert("Success", "Item deleted from community.");
+             } catch (error) {
+                console.error("Error deleting item:", error);
+                Alert.alert("Error", "Could not delete the item.");
+             } finally {
+                setDeletingId(null);
+             }
+          }
+        }
+      ]
+    );
+  };
+
   const renderItem = ({ item }: { item: any }) => {
     const isProgram = activeTab === 'programs';
     const subtitle = isProgram 
@@ -137,22 +181,38 @@ export default function CommunityMarketplaceScreen() {
               </View>
             </View>
             
-            <TouchableOpacity 
-              style={[styles.downloadButton, item.authorId === currentUser?.uid && { opacity: 0.5 }]}
-              onPress={() => handleDownload(item)}
-              disabled={downloadingId === item.id || item.authorId === currentUser?.uid}
-            >
-              {downloadingId === item.id ? (
-                <ActivityIndicator size="small" color="#1f230f" />
-              ) : (
-                <>
-                  <Feather name="download" size={16} color="#1f230f" />
-                  <Text style={styles.downloadButtonText}>
-                    {item.authorId === currentUser?.uid ? 'Owned' : 'Get'}
-                  </Text>
-                </>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {item.authorId === currentUser?.uid && (
+                <TouchableOpacity
+                  style={[styles.downloadButton, { backgroundColor: '#ef4444' }]}
+                  onPress={() => handleDelete(item)}
+                  disabled={deletingId === item.id}
+                >
+                  {deletingId === item.id ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Feather name="trash-2" size={16} color="#fff" />
+                  )}
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.downloadButton, item.authorId === currentUser?.uid && { opacity: 0.5 }]}
+                onPress={() => handleDownload(item)}
+                disabled={downloadingId === item.id || item.authorId === currentUser?.uid}
+              >
+                {downloadingId === item.id ? (
+                  <ActivityIndicator size="small" color="#1f230f" />
+                ) : (
+                  <>
+                    <Feather name="download" size={16} color="#1f230f" />
+                    <Text style={styles.downloadButtonText}>
+                      {item.authorId === currentUser?.uid ? 'Owned' : 'Get'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>

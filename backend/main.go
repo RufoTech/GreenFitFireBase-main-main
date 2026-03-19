@@ -830,6 +830,118 @@ func downloadCommunityWorkoutHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// deleteCommunityProgramHandler deletes a community program shared by the user
+func deleteCommunityProgramHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		http.Error(w, "Only POST/DELETE methods are allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	token := r.Context().Value("userToken").(*auth.Token)
+	uid := token.UID
+
+	var payload struct {
+		ItemId string `json:"itemId"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if payload.ItemId == "" {
+		http.Error(w, "itemId is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+
+	// 1. Fetch the shared program
+	docSnap, err := firestoreClient.Collection("community_shared_programs").Doc(payload.ItemId).Get(ctx)
+	if err != nil {
+		log.Printf("Error fetching shared program for deletion: %v", err)
+		http.Error(w, "Program not found", http.StatusNotFound)
+		return
+	}
+
+	data := docSnap.Data()
+
+	// 2. Prevent deleting someone else's program
+	if data["authorId"] != uid {
+		http.Error(w, "You can only delete your own program", http.StatusForbidden)
+		return
+	}
+
+	// 3. Delete the program
+	_, err = firestoreClient.Collection("community_shared_programs").Doc(payload.ItemId).Delete(ctx)
+	if err != nil {
+		log.Printf("Error deleting shared program: %v", err)
+		http.Error(w, "Failed to delete program", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Program deleted successfully",
+	})
+}
+
+// deleteCommunityWorkoutHandler deletes a custom workout shared by the user
+func deleteCommunityWorkoutHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		http.Error(w, "Only POST/DELETE methods are allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	token := r.Context().Value("userToken").(*auth.Token)
+	uid := token.UID
+
+	var payload struct {
+		ItemId string `json:"itemId"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if payload.ItemId == "" {
+		http.Error(w, "itemId is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+
+	// 1. Fetch the shared workout
+	docSnap, err := firestoreClient.Collection("community_shared_workouts").Doc(payload.ItemId).Get(ctx)
+	if err != nil {
+		log.Printf("Error fetching shared workout for deletion: %v", err)
+		http.Error(w, "Workout not found", http.StatusNotFound)
+		return
+	}
+
+	data := docSnap.Data()
+
+	// 2. Prevent deleting someone else's workout
+	if data["authorId"] != uid {
+		http.Error(w, "You can only delete your own workout", http.StatusForbidden)
+		return
+	}
+
+	// 3. Delete the workout
+	_, err = firestoreClient.Collection("community_shared_workouts").Doc(payload.ItemId).Delete(ctx)
+	if err != nil {
+		log.Printf("Error deleting shared workout: %v", err)
+		http.Error(w, "Failed to delete workout", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Workout deleted successfully",
+	})
+}
+
 func main() {
 	// 1. Firebase üçün context yaradırıq
 	ctx := context.Background()
@@ -883,6 +995,8 @@ func main() {
 	http.HandleFunc("/api/community/items", authMiddleware(getCommunityItemsHandler))
 	http.HandleFunc("/api/community/download-program", authMiddleware(downloadCommunityProgramHandler))
 	http.HandleFunc("/api/community/download-workout", authMiddleware(downloadCommunityWorkoutHandler))
+	http.HandleFunc("/api/community/delete-program", authMiddleware(deleteCommunityProgramHandler))
+	http.HandleFunc("/api/community/delete-workout", authMiddleware(deleteCommunityWorkoutHandler))
 
 	fmt.Println("Server http://localhost:8080 ünvanında dinləyir...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
