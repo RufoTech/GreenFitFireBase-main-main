@@ -50,6 +50,13 @@ export default function ProfileScreen() {
   const router = useRouter();
   const user = auth().currentUser;
 
+  React.useEffect(() => {
+    // Configure GoogleSignin to prevent 'apiClient is null' error on sign out
+    GoogleSignin.configure({
+      webClientId: '802032521156-plrtru1qe837u5cr60nl2p5jtsik201b.apps.googleusercontent.com',
+    });
+  }, []);
+
   const handleLogout = async () => {
     try {
       await GoogleSignin.signOut();

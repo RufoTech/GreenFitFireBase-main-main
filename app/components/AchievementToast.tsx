@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Animated, StyleSheet, Text, View, Dimensions, TouchableOpacity } from 'react-native';
+import { Animated, StyleSheet, Text, View, Dimensions, TouchableOpacity, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { AppEvents } from '../utils/eventEmitter';
 import { Achievement } from '../utils/achievementManager';
@@ -20,11 +20,16 @@ export default function AchievementToast() {
         clearTimeout(timeoutRef.current);
       }
 
+      // Reset to top before animating down
+      translateY.setValue(-150);
+      opacity.setValue(0);
+
       Animated.parallel([
-        Animated.timing(translateY, {
-          toValue: 50,
-          duration: 300,
+        Animated.spring(translateY, {
+          toValue: Platform.OS === 'ios' ? 60 : 40,
           useNativeDriver: true,
+          friction: 8,
+          tension: 40
         }),
         Animated.timing(opacity, {
           toValue: 1,
@@ -89,8 +94,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 20,
     right: 20,
-    zIndex: 9999,
-    elevation: 9999,
+    zIndex: 999999, // Ensure it's above everything
+    elevation: 999999, // For Android
   },
   content: {
     backgroundColor: '#1c1f10',
