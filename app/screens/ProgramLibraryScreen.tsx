@@ -36,6 +36,7 @@ interface SavedWorkout {
   exerciseCount: number;
   duration: string;
   image: string;
+  source: 'saved_workouts' | 'customUserWorkouts';
 }
 
 export default function ProgramLibraryScreen() {
@@ -53,7 +54,19 @@ export default function ProgramLibraryScreen() {
     }
     const userId = user.uid;
 
-    const unsubscribe = firestore()
+    let savedList: SavedWorkout[] = [];
+    let customList: SavedWorkout[] = [];
+    let savedLoaded = false;
+    let customLoaded = false;
+
+    const mergeAndSet = () => {
+      if (savedLoaded && customLoaded) {
+        setSavedWorkouts([...savedList, ...customList]);
+        setLoading(false);
+      }
+    };
+
+    const unsubscribeSaved = firestore()
       .collection('saved_workouts')
       .where('userId', '==', userId)
       .orderBy('savedAt', 'desc')
@@ -69,19 +82,53 @@ export default function ProgramLibraryScreen() {
             exerciseCount: data.exerciseCount || 0,
             duration: data.duration || '0',
             image: data.image || 'https://via.placeholder.com/150',
+            source: 'saved_workouts',
           });
         });
-        setSavedWorkouts(workouts);
-        setLoading(false);
+        savedList = workouts;
+        savedLoaded = true;
+        mergeAndSet();
       }, error => {
         console.error("Error fetching saved workouts:", error);
-        setLoading(false);
+        savedLoaded = true;
+        mergeAndSet();
       });
 
-    return () => unsubscribe();
+    const unsubscribeCustom = firestore()
+      .collection('customUserWorkouts')
+      .where('userId', '==', userId)
+      .onSnapshot(querySnapshot => {
+        const workouts: SavedWorkout[] = [];
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          const exerciseCount = data.exerciseCount || (data.exercises ? data.exercises.reduce((acc: number, block: any) => acc + (block.sets ? block.sets.reduce((sAcc: number, set: any) => sAcc + (set.movements ? set.movements.length : 0), 0) : 0), 0) : 0);
+          workouts.push({
+            id: doc.id,
+            title: data.name || data.title || 'Custom Workout',
+            level: data.level || data.difficulty || 'Custom',
+            muscle: data.target || data.targetMuscle || 'General',
+            exerciseCount: exerciseCount,
+            duration: data.duration ? String(data.duration) : '0',
+            image: data.coverImage || data.image || 'https://via.placeholder.com/150',
+            source: 'customUserWorkouts',
+          });
+        });
+        customList = workouts;
+        customLoaded = true;
+        mergeAndSet();
+      }, error => {
+        console.error("Error fetching custom workouts:", error);
+        customLoaded = true;
+        mergeAndSet();
+      });
+
+    return () => {
+      unsubscribeSaved();
+      unsubscribeCustom();
+    };
   }, []);
 
-  const handleDelete = (workoutId: string) => {
+  const handleDelete = (workout: SavedWorkout) => {
     Alert.alert(
       "Delete Workout",
       "Are you sure you want to delete this workout?",
@@ -92,10 +139,10 @@ export default function ProgramLibraryScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await firestore().collection('saved_workouts').doc(workoutId).delete();
+              await firestore().collection(workout.source).doc(workout.id).delete();
               // No need to manually update state as onSnapshot handles it
             } catch (error) {
-              console.error("Error deleting saved workout:", error);
+              console.error("Error deleting workout:", error);
               Alert.alert("Error", "Failed to delete workout.");
             }
           }
@@ -191,11 +238,19 @@ export default function ProgramLibraryScreen() {
                     <TouchableOpacity
                       style={styles.startButton}
                       onPress={() => {
-                        // Navigation removed as requested
+                        router.push({
+                          pathname: '/screens/WorkoutDetailsScreen',
+                          params: {
+                            id: item.id,
+                            isCustom: item.source === 'customUserWorkouts' ? 'true' : 'false',
+                            hideAddToDay: 'true',
+                            fromLibrary: 'true'
+                          }
+                        });
                       }}
                     >
-                      <MaterialIcons name="play-arrow" size={20} color={BG_DARK} />
-                      <Text style={styles.startButtonText}>Start Workout</Text>
+                      <MaterialIcons name="visibility" size={20} color={BG_DARK} />
+                      <Text style={styles.startButtonText}>View Details</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -203,7 +258,7 @@ export default function ProgramLibraryScreen() {
                     <Image source={{ uri: item.image }} style={styles.workoutImage} />
                     <TouchableOpacity
                       style={styles.deleteButton}
-                      onPress={() => handleDelete(item.id)}
+                      onPress={() => handleDelete(item)}
                     >
                       <MaterialIcons name="delete" size={18} color="#ef4444" />
                     </TouchableOpacity>

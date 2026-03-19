@@ -63,7 +63,7 @@ interface WorkoutDetails {
 
 export default function WorkoutDetailsScreen() {
   const router = useRouter();
-  const { id, isCustom, hideAddToDay, isRecommended } = useLocalSearchParams();
+  const { id, isCustom, hideAddToDay, isRecommended, fromLibrary } = useLocalSearchParams();
   const [workout, setWorkout] = useState<WorkoutDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
@@ -376,18 +376,22 @@ export default function WorkoutDetailsScreen() {
          </TouchableOpacity>
          <Text style={styles.navTitle}>Workout Details</Text>
          <View style={{ flexDirection: 'row', gap: 8 }}>
-           <TouchableOpacity 
-              style={styles.navButton}
-              onPress={handleCommunityShare}
-           >
-              <MaterialIcons name="public" size={24} color="#f1f5f9" />
-           </TouchableOpacity>
-           <TouchableOpacity 
-              style={styles.navButton}
-              onPress={handleShare}
-           >
-              <MaterialIcons name="share" size={24} color="#f1f5f9" />
-           </TouchableOpacity>
+           {fromLibrary !== 'true' && (
+            <TouchableOpacity 
+               style={styles.navButton}
+               onPress={handleCommunityShare}
+            >
+               <MaterialIcons name="public" size={24} color="#f1f5f9" />
+            </TouchableOpacity>
+           )}
+           {fromLibrary !== 'true' && (
+            <TouchableOpacity 
+               style={styles.navButton}
+               onPress={handleShare}
+            >
+               <MaterialIcons name="share" size={24} color="#f1f5f9" />
+            </TouchableOpacity>
+           )}
          </View>
       </View>
 
@@ -425,14 +429,16 @@ export default function WorkoutDetailsScreen() {
               <Text style={styles.addToDayText}>Add to Day</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity  
-            style={[styles.saveToLibraryButton, isSaved && styles.savedButton]}
-            onPress={handleToggleLibrary}
-          >
-            <Text style={[styles.saveToLibraryText, isSaved && styles.savedButtonText]}>
-                {isSaved ? 'Saved' : 'Save to Library'}
-            </Text>
-          </TouchableOpacity>
+          {fromLibrary !== 'true' && (
+            <TouchableOpacity  
+              style={[styles.saveToLibraryButton, isSaved && styles.savedButton]}
+              onPress={handleToggleLibrary}
+            >
+              <Text style={[styles.saveToLibraryText, isSaved && styles.savedButtonText]}>
+                  {isSaved ? 'Saved' : 'Save to Library'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Workout Summary Info */}
