@@ -401,6 +401,17 @@ export default function DashboardScreen() {
               </View>
               <Text style={[styles.actionText, { color: currentTheme.text }]}>Log Weight</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => router.push('/screens/CommunityMarketplaceScreen')}
+            >
+              <View style={[styles.actionIconContainer, { backgroundColor: isDark ? '#1e293b' : '#e2e8f0' }]}>
+                <MaterialIcons name="public" size={24} color={currentTheme.text} />
+              </View>
+              <Text style={[styles.actionText, { color: currentTheme.text }]}>Community</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity 
               style={styles.actionButton}
               onPress={() => router.push('/screens/WorkoutLibraryScreen')}

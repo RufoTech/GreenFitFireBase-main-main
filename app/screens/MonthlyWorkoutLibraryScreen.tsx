@@ -5,22 +5,24 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  ImageBackground,
-  Modal,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    ImageBackground,
+    Modal,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
+
+const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
 
 const { width } = Dimensions.get('window');
 
@@ -283,6 +285,63 @@ export default function MonthlyWorkoutLibraryScreen() {
       );
   };
 
+  const handleShareProgram = (program: any) => {
+    Alert.alert(
+      "Share Program",
+      "Do you want to share this program with the community?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Share", 
+          onPress: async () => {
+            try {
+              const user = auth().currentUser;
+              if (!user) return;
+              
+              const token = await user.getIdToken();
+              
+              // First fetch the program weeks since it's in a separate collection
+              const weeksDoc = await firestore().collection('user_program_weeks').doc(program.id).get();
+              let weeksData = {};
+              if (weeksDoc.exists) {
+                weeksData = weeksDoc.data()?.weeks || {};
+              }
+
+              const payload = {
+                originalId: program.id,
+                authorName: user.displayName || user.email || 'Anonymous User',
+                title: program.name || 'My Custom Program',
+                focus: program.level || 'General',
+                coverImage: program.image || null,
+                workoutCount: program.workoutCount || 0,
+                totalDuration: program.totalDuration || 0,
+                weeks: weeksData
+              };
+
+              const response = await fetch(`${API_URL}/api/community/share-program`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+              });
+
+              if (!response.ok) {
+                throw new Error('Failed to share program');
+              }
+
+              Alert.alert("Success", "Your program has been shared with the community!");
+            } catch (error) {
+              console.error("Error sharing program:", error);
+              Alert.alert("Error", "Failed to share program. Please try again.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const filteredPrograms = userPrograms.filter(prog => {
     const matchesSearch = prog.name.toLowerCase().includes(search.toLowerCase());
     
@@ -380,12 +439,20 @@ export default function MonthlyWorkoutLibraryScreen() {
                               </Text>
                               <Text style={styles.noImageTitle}>{program.name}</Text>
                             </View>
-                            <TouchableOpacity 
-                                onPress={() => handleDeleteProgram(program.id)}
-                                style={{ padding: 4 }}
-                            >
-                                <MaterialIcons name="delete-outline" size={24} color="#ef4444" />
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <TouchableOpacity 
+                                  onPress={() => handleShareProgram(program)}
+                                  style={{ padding: 4, marginRight: 8 }}
+                              >
+                                  <MaterialIcons name="share" size={24} color="#3b82f6" />
+                              </TouchableOpacity>
+                              <TouchableOpacity 
+                                  onPress={() => handleDeleteProgram(program.id)}
+                                  style={{ padding: 4 }}
+                              >
+                                  <MaterialIcons name="delete-outline" size={24} color="#ef4444" />
+                              </TouchableOpacity>
+                            </View>
                           </View>
 
                           {/* Details Section */}
@@ -435,6 +502,12 @@ export default function MonthlyWorkoutLibraryScreen() {
                       <View style={[styles.levelBadge, { backgroundColor: program.levelColor || '#ccff00' }]}>
                         <Text style={styles.levelText}>{program.level || 'General'}</Text>
                       </View>
+                      <TouchableOpacity 
+                          style={styles.shareButton}
+                          onPress={() => handleShareProgram(program)}
+                      >
+                        <MaterialIcons name="share" size={18} color="#3b82f6" />
+                      </TouchableOpacity>
                       <TouchableOpacity 
                           style={styles.deleteButton}
                           onPress={() => handleDeleteProgram(program.id)}
@@ -856,6 +929,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 12,
     right: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shareButton: {
+    position: 'absolute',
+    top: 12,
+    right: 52,
     width: 32,
     height: 32,
     borderRadius: 16,

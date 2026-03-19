@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Dimensions,
     Image,
     ImageBackground,
@@ -20,6 +21,7 @@ import {
 } from 'react-native';
 import { SelectionStore } from '../utils/SelectionStore';
 
+const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
 
 const { width } = Dimensions.get('window');
 
@@ -262,6 +264,57 @@ export default function WorkoutDetailsScreen() {
     }
   };
 
+  const handleCommunityShare = () => {
+    if (!workout) return;
+    Alert.alert(
+      "Share with Community",
+      "Do you want to share this workout to the community marketplace?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Share", 
+          onPress: async () => {
+            try {
+              const user = auth().currentUser;
+              if (!user) return;
+              
+              const token = await user.getIdToken();
+
+              const payload = {
+                originalId: workout.id,
+                authorName: user.displayName || user.email || 'Anonymous User',
+                title: workout.name,
+                coverImage: workout.coverImage || null,
+                difficulty: workout.difficulty || 'Intermediate',
+                duration: workout.duration || 30,
+                targetMuscle: workout.targetMuscle || 'Full Body',
+                exercises: workout.exercises || [],
+              };
+
+              const response = await fetch(`${API_URL}/api/community/share-workout`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+              });
+
+              if (!response.ok) {
+                throw new Error('Failed to share workout');
+              }
+
+              Alert.alert("Success", "Your workout has been shared with the community!");
+            } catch (error) {
+              console.error("Error sharing workout:", error);
+              Alert.alert("Error", "Failed to share workout.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleAddToDay = () => {
     if (!workout) return;
     
@@ -321,13 +374,21 @@ export default function WorkoutDetailsScreen() {
          >
             <MaterialIcons name="arrow-back" size={24} color="#f1f5f9" />
          </TouchableOpacity>
-         <Text style={styles.navTitle}>Workout Dsetails</Text>
-         <TouchableOpacity 
-            style={styles.navButton}
-            onPress={handleShare}
-         >
-            <MaterialIcons name="share" size={24} color="#f1f5f9" />
-         </TouchableOpacity>
+         <Text style={styles.navTitle}>Workout Details</Text>
+         <View style={{ flexDirection: 'row', gap: 8 }}>
+           <TouchableOpacity 
+              style={styles.navButton}
+              onPress={handleCommunityShare}
+           >
+              <MaterialIcons name="public" size={24} color="#f1f5f9" />
+           </TouchableOpacity>
+           <TouchableOpacity 
+              style={styles.navButton}
+              onPress={handleShare}
+           >
+              <MaterialIcons name="share" size={24} color="#f1f5f9" />
+           </TouchableOpacity>
+         </View>
       </View>
 
       <ScrollView 

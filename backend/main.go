@@ -510,6 +510,326 @@ func createCustomWorkoutHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// shareProgramToCommunityHandler shares a user program to the community marketplace
+func shareProgramToCommunityHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	token := r.Context().Value("userToken").(*auth.Token)
+	uid := token.UID
+
+	var payload struct {
+		OriginalId    string                 `json:"originalId"`
+		AuthorName    string                 `json:"authorName"`
+		Title         string                 `json:"title"`
+		Focus         string                 `json:"focus"`
+		CoverImage    string                 `json:"coverImage"`
+		WorkoutCount  int                    `json:"workoutCount"`
+		TotalDuration int                    `json:"totalDuration"`
+		Weeks         map[string]interface{} `json:"weeks"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if payload.OriginalId == "" || payload.Title == "" {
+		http.Error(w, "originalId and title are required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+
+	// Prepare data for community_shared_programs
+	sharedData := map[string]interface{}{
+		"originalId":    payload.OriginalId,
+		"authorId":      uid,
+		"authorName":    payload.AuthorName,
+		"title":         payload.Title,
+		"focus":         payload.Focus,
+		"coverImage":    payload.CoverImage,
+		"workoutCount":  payload.WorkoutCount,
+		"totalDuration": payload.TotalDuration,
+		"weeks":         payload.Weeks,
+		"createdAt":     firestore.ServerTimestamp,
+		"downloads":     0,
+		"likes":         0,
+	}
+
+	docRef, _, err := firestoreClient.Collection("community_shared_programs").Add(ctx, sharedData)
+	if err != nil {
+		log.Printf("Error sharing program: %v", err)
+		http.Error(w, "Failed to share program", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Program shared successfully",
+		"id":      docRef.ID,
+	})
+}
+
+// shareWorkoutToCommunityHandler shares a custom workout to the community marketplace
+func shareWorkoutToCommunityHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	token := r.Context().Value("userToken").(*auth.Token)
+	uid := token.UID
+
+	var payload struct {
+		OriginalId   string        `json:"originalId"`
+		AuthorName   string        `json:"authorName"`
+		Title        string        `json:"title"`
+		CoverImage   string        `json:"coverImage"`
+		Difficulty   string        `json:"difficulty"`
+		Duration     int           `json:"duration"`
+		TargetMuscle string        `json:"targetMuscle"`
+		Exercises    []interface{} `json:"exercises"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if payload.OriginalId == "" || payload.Title == "" {
+		http.Error(w, "originalId and title are required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+
+	// Prepare data for community_shared_workouts
+	sharedData := map[string]interface{}{
+		"originalId":   payload.OriginalId,
+		"authorId":     uid,
+		"authorName":   payload.AuthorName,
+		"title":        payload.Title,
+		"coverImage":   payload.CoverImage,
+		"difficulty":   payload.Difficulty,
+		"duration":     payload.Duration,
+		"targetMuscle": payload.TargetMuscle,
+		"exercises":    payload.Exercises,
+		"createdAt":    firestore.ServerTimestamp,
+		"downloads":    0,
+		"likes":        0,
+	}
+
+	docRef, _, err := firestoreClient.Collection("community_shared_workouts").Add(ctx, sharedData)
+	if err != nil {
+		log.Printf("Error sharing workout: %v", err)
+		http.Error(w, "Failed to share workout", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Workout shared successfully",
+		"id":      docRef.ID,
+	})
+}
+
+// getCommunityItemsHandler fetches items from the community marketplace
+func getCommunityItemsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Only GET method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	itemType := r.URL.Query().Get("type")
+	if itemType != "programs" && itemType != "workouts" {
+		http.Error(w, "type parameter must be 'programs' or 'workouts'", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+	collectionName := "community_shared_programs"
+	if itemType == "workouts" {
+		collectionName = "community_shared_workouts"
+	}
+
+	iter := firestoreClient.Collection(collectionName).OrderBy("createdAt", firestore.Desc).Documents(ctx)
+	var items []map[string]interface{}
+
+	for {
+		doc, err := iter.Next()
+		if err != nil {
+			break // End of iterator or error
+		}
+		data := doc.Data()
+		data["id"] = doc.Ref.ID
+		items = append(items, data)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(items)
+}
+
+// downloadCommunityProgramHandler clones a community program to the user's library
+func downloadCommunityProgramHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	token := r.Context().Value("userToken").(*auth.Token)
+	uid := token.UID
+
+	var payload struct {
+		ItemId string `json:"itemId"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if payload.ItemId == "" {
+		http.Error(w, "itemId is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+
+	// 1. Fetch the shared program
+	docSnap, err := firestoreClient.Collection("community_shared_programs").Doc(payload.ItemId).Get(ctx)
+	if err != nil {
+		log.Printf("Error fetching shared program: %v", err)
+		http.Error(w, "Program not found", http.StatusNotFound)
+		return
+	}
+
+	data := docSnap.Data()
+
+	// Prevent downloading own program
+	if data["authorId"] == uid {
+		http.Error(w, "You cannot download your own program", http.StatusBadRequest)
+		return
+	}
+
+	// 2. Clone to user_programs
+	newProgramData := map[string]interface{}{
+		"userId":        uid,
+		"name":          data["title"],
+		"focus":         data["focus"],
+		"coverImage":    data["coverImage"],
+		"workoutCount":  data["workoutCount"],
+		"totalDuration": data["totalDuration"],
+		"difficulty":    "Custom",
+		"createdAt":     firestore.ServerTimestamp,
+	}
+
+	newProgRef, _, err := firestoreClient.Collection("user_programs").Add(ctx, newProgramData)
+	if err != nil {
+		http.Error(w, "Failed to create user program", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Clone to user_program_weeks
+	if weeks, ok := data["weeks"]; ok {
+		weekData := map[string]interface{}{
+			"userId":    uid,
+			"createdAt": firestore.ServerTimestamp,
+			"weeks":     weeks,
+		}
+		_, err = firestoreClient.Collection("user_program_weeks").Doc(newProgRef.ID).Set(ctx, weekData)
+		if err != nil {
+			log.Printf("Error saving weeks: %v", err)
+			// Non-fatal, but log it
+		}
+	}
+
+	// 4. Increment downloads
+	_, err = firestoreClient.Collection("community_shared_programs").Doc(payload.ItemId).Update(ctx, []firestore.Update{
+		{Path: "downloads", Value: firestore.Increment(1)},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Program downloaded successfully",
+		"newId":   newProgRef.ID,
+	})
+}
+
+// downloadCommunityWorkoutHandler clones a community workout to the user's library
+func downloadCommunityWorkoutHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	token := r.Context().Value("userToken").(*auth.Token)
+	uid := token.UID
+
+	var payload struct {
+		ItemId string `json:"itemId"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if payload.ItemId == "" {
+		http.Error(w, "itemId is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+
+	// 1. Fetch the shared workout
+	docSnap, err := firestoreClient.Collection("community_shared_workouts").Doc(payload.ItemId).Get(ctx)
+	if err != nil {
+		log.Printf("Error fetching shared workout: %v", err)
+		http.Error(w, "Workout not found", http.StatusNotFound)
+		return
+	}
+
+	data := docSnap.Data()
+
+	// Prevent downloading own workout
+	if data["authorId"] == uid {
+		http.Error(w, "You cannot download your own workout", http.StatusBadRequest)
+		return
+	}
+
+	// 2. Clone to customUserWorkouts
+	newWorkoutData := map[string]interface{}{
+		"userId":       uid,
+		"name":         data["title"],
+		"coverImage":   data["coverImage"],
+		"difficulty":   data["difficulty"],
+		"duration":     data["duration"],
+		"targetMuscle": data["targetMuscle"],
+		"exercises":    data["exercises"],
+		"createdAt":    firestore.ServerTimestamp,
+	}
+
+	newWorkRef, _, err := firestoreClient.Collection("customUserWorkouts").Add(ctx, newWorkoutData)
+	if err != nil {
+		http.Error(w, "Failed to create user workout", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Increment downloads
+	_, err = firestoreClient.Collection("community_shared_workouts").Doc(payload.ItemId).Update(ctx, []firestore.Update{
+		{Path: "downloads", Value: firestore.Increment(1)},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Workout downloaded successfully",
+		"newId":   newWorkRef.ID,
+	})
+}
+
 func main() {
 	// 1. Firebase üçün context yaradırıq
 	ctx := context.Background()
@@ -541,7 +861,8 @@ func main() {
 	// Rotalar (Routes)
 	// Açıq rota (Token tələb etmir)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "GreenFit Go Backend işləyir! (Açıq səhifə)")
+		log.Printf("Fallback to root handler for path: %s", r.URL.Path)
+		fmt.Fprintf(w, "GreenFit Go Backend işləyir! (Açıq səhifə) - Path: %s", r.URL.Path)
 	})
 
 	// Qorunan rota (Token TƏLƏB edir)
@@ -555,6 +876,13 @@ func main() {
 
 	// NEW: Create Custom Workout
 	http.HandleFunc("/api/create-custom-workout", authMiddleware(createCustomWorkoutHandler))
+
+	// COMMUNITY ROUTES
+	http.HandleFunc("/api/community/share-program", authMiddleware(shareProgramToCommunityHandler))
+	http.HandleFunc("/api/community/share-workout", authMiddleware(shareWorkoutToCommunityHandler))
+	http.HandleFunc("/api/community/items", authMiddleware(getCommunityItemsHandler))
+	http.HandleFunc("/api/community/download-program", authMiddleware(downloadCommunityProgramHandler))
+	http.HandleFunc("/api/community/download-workout", authMiddleware(downloadCommunityWorkoutHandler))
 
 	fmt.Println("Server http://localhost:8080 ünvanında dinləyir...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
