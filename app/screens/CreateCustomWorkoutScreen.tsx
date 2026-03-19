@@ -667,7 +667,7 @@ export default function CreateCustomWorkoutScreen() {
                             onPress={() => {
                                 setShowSuccessModal(false);
                                 // For custom workouts, maybe route to library or start it directly
-                                router.replace('/screens/MonthlyWorkoutLibraryScreen');
+                                router.replace('/screens/AddWorkoutScreen');
                             }}
                         >
                             <MaterialIcons name="list-alt" size={24} color="#1f230f" />
