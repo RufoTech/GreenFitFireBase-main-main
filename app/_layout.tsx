@@ -9,6 +9,7 @@ import * as NavigationBar from 'expo-navigation-bar';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import AchievementToast from './components/AchievementToast';
 
 // Splash screen'in otomatik kapanmasını engelle (Fontlar yüklenene kadar)
 SplashScreen.preventAutoHideAsync();
@@ -86,6 +87,7 @@ export default function RootLayout() {
         <Stack.Screen name="screens/MealDetailsScreen" />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
+      <AchievementToast />
       <StatusBar style="auto" />
     </ThemeProvider>
   );

@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { BatteryOptEnabled, RequestDisableOptimization } from 'react-native-battery-optimization-check';
 import { getStoredSteps } from '../utils/stepManager';
+import { useAchievements } from '../utils/useAchievements';
 import { getWaterLogs } from '../utils/waterManager';
 
 const { width } = Dimensions.get('window');
@@ -54,6 +55,9 @@ export default function DashboardScreen() {
   const [isDark, setIsDark] = useState(true);
   const currentTheme = isDark ? theme.dark : theme.light;
   const user = auth().currentUser;
+  
+  // Initialize initial achievements check
+  useAchievements();
   
   const [waterData, setWaterData] = useState<{ today: number; yesterday: number }>({ today: 0, yesterday: 0 });
   const [stepsData, setStepsData] = useState<{ today: number; yesterday: number }>({ today: 0, yesterday: 0 });

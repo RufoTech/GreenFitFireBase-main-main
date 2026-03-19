@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { checkHydrationHero } from './achievementManager';
 
 const WATER_STORAGE_KEY_PREFIX = 'water_';
 const DAILY_GOAL_KEY = 'water_daily_goal';
@@ -87,6 +88,14 @@ export const saveWaterLogs = async (date: Date, logs: WaterLog[], totalConsumed:
             totalConsumed
         };
         await AsyncStorage.setItem(key, JSON.stringify(data));
+
+        // Check water achievements locally
+        const goal = await getDailyGoal();
+        // Yalnız bugünün tarixidirsə başarım yoxlanılsın
+        const todayStr = formatDate(new Date());
+        if (dateStr === todayStr) {
+            await checkHydrationHero(totalConsumed, goal);
+        }
     } catch (e) {
         console.error("Error saving water logs", e);
     }

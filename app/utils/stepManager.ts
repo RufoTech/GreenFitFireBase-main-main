@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Pedometer } from 'expo-sensors';
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
+import { checkStepAchievements } from './achievementManager';
 
 const STORAGE_KEY_PREFIX = 'steps_';
 const TRACKING_START_DATE_KEY = 'tracking_start_date';
@@ -38,6 +39,29 @@ export const saveSteps = async (date: Date, steps: number): Promise<void> => {
   try {
     const key = `${STORAGE_KEY_PREFIX}${formatDate(date)}`;
     await AsyncStorage.setItem(key, steps.toString());
+
+    // Check step achievements
+    const history = await getAllHistory();
+    const allTimeSteps = history.reduce((sum, d) => sum + d.steps, 0);
+    
+    // Calculate streak
+    let streakDays = 0;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    for (let i = 0; i < history.length; i++) {
+      // check backward from today
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const dayData = history.find(h => h.date === formatDate(d));
+      if (dayData && dayData.steps >= dayData.goal) {
+        streakDays++;
+      } else if (i > 0) {
+        // Break the streak if not today and goal not met
+        break;
+      }
+    }
+
+    await checkStepAchievements(steps, allTimeSteps, streakDays);
   } catch (error) {
     console.error('Error saving steps to storage:', error);
   }

@@ -1,7 +1,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React from 'react';
-import { Dimensions, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { ACHIEVEMENTS, getUnlockedAchievements, getUserXp } from '../utils/achievementManager';
+import { AppEvents } from '../utils/eventEmitter';
 
 const { width } = Dimensions.get('window');
 
@@ -11,69 +13,85 @@ const CARD_BG = "#1c1f10";
 const LOCKED_GRAY = "#4a4a4a";
 const TEXT_MUTED = "#94a3b8";
 
-// Dummy data for achievements
-const achievements = [
-  {
-    id: '1',
-    title: '7-Day Streak',
-    status: 'Unlocked Oct 20',
-    icon: 'local-fire-department',
-    isUnlocked: true,
-  },
-  {
-    id: '2',
-    title: 'First 10k Steps',
-    status: 'Unlocked Oct 22',
-    icon: 'directions-walk',
-    isUnlocked: true,
-    customText: '10K',
-  },
-  {
-    id: '3',
-    title: 'Workout Warrior',
-    status: 'Unlocked Oct 24',
-    icon: 'fitness-center',
-    isUnlocked: true,
-  },
-  {
-    id: '4',
-    title: 'Marathon Runner',
-    status: 'Locked',
-    icon: 'directions-run',
-    isUnlocked: false,
-  },
-  {
-    id: '5',
-    title: 'Muscle Master',
-    status: 'Locked',
-    icon: 'accessibility-new',
-    isUnlocked: false,
-  },
-  {
-    id: '6',
-    title: 'Flexibility Guru',
-    status: 'Locked',
-    icon: 'self-improvement',
-    isUnlocked: false,
-  },
-  {
-    id: '7',
-    title: 'Early Bird',
-    status: 'Unlocked Oct 26',
-    icon: 'wb-sunny',
-    isUnlocked: true,
-  },
-  {
-    id: '8',
-    title: 'Hydration Hero',
-    status: 'Locked',
-    icon: 'water-drop',
-    isUnlocked: false,
-  },
-];
+// Calculate level based on XP (e.g. 500 XP per level)
+const getLevelInfo = (xp: number) => {
+  const XP_PER_LEVEL = 500;
+  const currentLevel = Math.floor(xp / XP_PER_LEVEL) + 1;
+  const nextLevel = currentLevel + 1;
+  const currentLevelXp = xp % XP_PER_LEVEL;
+  const progress = (currentLevelXp / XP_PER_LEVEL) * 100;
+
+  return {
+    currentLevel,
+    nextLevel,
+    currentLevelXp,
+    requiredXp: XP_PER_LEVEL,
+    progress
+  };
+};
 
 export default function AchievementsScreen() {
   const router = useRouter();
+  const [unlockedAchievements, setUnlockedAchievements] = useState<any[]>([]);
+  const [userXp, setUserXp] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const xp = await getUserXp();
+      setUserXp(xp);
+
+      const unlockedRecord = await getUnlockedAchievements();
+      const unlockedArray = Object.values(unlockedRecord);
+      
+      console.log("[AchievementsScreen Local] Unlocked achievements:", unlockedArray.map(u => u.id));
+      setUnlockedAchievements(unlockedArray);
+    } catch (error) {
+      console.error("Error loading local achievements", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+
+    // Listen for real-time updates when an achievement is unlocked while screen is open
+    const handleUpdate = () => {
+      loadData();
+    };
+
+    AppEvents.on('ACHIEVEMENTS_UPDATED', handleUpdate);
+
+    return () => {
+      AppEvents.off('ACHIEVEMENTS_UPDATED', handleUpdate);
+    };
+  }, []);
+
+  const levelInfo = getLevelInfo(userXp);
+
+  // Map our predefined ACHIEVEMENTS with unlock status
+  const displayAchievements = Object.values(ACHIEVEMENTS).map(ach => {
+    // Both unlockedData.id and ach.id should match exactly
+    const unlockedData = unlockedAchievements.find(u => String(u.id) === String(ach.id));
+    
+    let statusText = 'Locked';
+    if (unlockedData?.unlockedAt) {
+      const date = new Date(unlockedData.unlockedAt);
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      statusText = `Unlocked ${monthNames[date.getMonth()]} ${date.getDate()}`;
+    } else if (unlockedData) {
+      statusText = 'Unlocked';
+    }
+
+    return {
+      ...ach,
+      status: statusText,
+      isUnlocked: !!unlockedData,
+      customText: ach.id === 'first_10k' ? '10K' : undefined
+    };
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -92,56 +110,63 @@ export default function AchievementsScreen() {
       </View>
       <Text style={styles.headerSubtitle}>Your Progress & Achievements</Text>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Badges & Milestones</Text>
-
-        <View style={styles.grid}>
-          {achievements.map((item) => (
-            <View key={item.id} style={[styles.badgeContainer, !item.isUnlocked && styles.lockedOpacity]}>
-              <View style={styles.badgeWrapper}>
-                  <View style={[
-                      styles.badgeCircle, 
-                      item.isUnlocked ? styles.unlockedBorder : styles.lockedBorder,
-                      item.isUnlocked && styles.glowEffect
-                  ]}>
-                    <MaterialIcons 
-                        name={item.icon as any} 
-                        size={36} 
-                        color={item.isUnlocked ? PRIMARY : LOCKED_GRAY} 
-                    />
-                    {item.customText && (
-                        <Text style={styles.customIconText}>{item.customText}</Text>
-                    )}
-                  </View>
-                  {/* Locked Padlock Icon */}
-                  {!item.isUnlocked && (
-                      <View style={styles.lockIconContainer}>
-                          <MaterialIcons name="lock" size={12} color="#ffffff" />
-                      </View>
-                  )}
-              </View>
-              <Text style={styles.badgeTitle} numberOfLines={2}>{item.title}</Text>
-              <Text style={styles.badgeStatus}>{item.status}</Text>
-            </View>
-          ))}
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={PRIMARY} />
+          <Text style={{ color: TEXT_MUTED, marginTop: 12, fontWeight: 'bold' }}>Loading achievements...</Text>
         </View>
-        
-        {/* Spacer for footer */}
-        <View style={{ height: 120 }} />
-      </ScrollView>
+      ) : (
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <Text style={styles.sectionTitle}>Badges & Milestones</Text>
+
+          <View style={styles.grid}>
+            {displayAchievements.map((item) => (
+              <View key={item.id} style={[styles.badgeContainer, !item.isUnlocked && styles.lockedOpacity]}>
+                <View style={styles.badgeWrapper}>
+                    <View style={[
+                        styles.badgeCircle, 
+                        item.isUnlocked ? styles.unlockedBorder : styles.lockedBorder,
+                        item.isUnlocked && styles.glowEffect
+                    ]}>
+                      <MaterialIcons 
+                          name={item.icon as any} 
+                          size={36} 
+                          color={item.isUnlocked ? PRIMARY : LOCKED_GRAY} 
+                      />
+                      {item.customText && (
+                          <Text style={styles.customIconText}>{item.customText}</Text>
+                      )}
+                    </View>
+                    {/* Locked Padlock Icon */}
+                    {!item.isUnlocked && (
+                        <View style={styles.lockIconContainer}>
+                            <MaterialIcons name="lock" size={12} color="#ffffff" />
+                        </View>
+                    )}
+                </View>
+                <Text style={styles.badgeTitle} numberOfLines={2}>{item.title}</Text>
+                <Text style={styles.badgeStatus}>{item.status}</Text>
+              </View>
+            ))}
+          </View>
+          
+          {/* Spacer for footer */}
+          <View style={{ height: 120 }} />
+        </ScrollView>
+      )}
 
       {/* Progress Footer */}
       <View style={styles.footer}>
         <View style={styles.levelRow}>
-            <Text style={styles.levelText}>Level 5</Text>
-            <Text style={styles.levelText}>Level 6</Text>
+            <Text style={styles.levelText}>Level {levelInfo.currentLevel}</Text>
+            <Text style={styles.levelText}>Level {levelInfo.nextLevel}</Text>
         </View>
         
         <View style={styles.progressContainer}>
-            <View style={[styles.progressFill, { width: '80%' }]} />
+            <View style={[styles.progressFill, { width: `${levelInfo.progress}%` }]} />
             <View style={styles.progressOverlay}>
-                <Text style={styles.progressValue}>400 / 500 XP</Text>
-                <Text style={styles.progressPercent}>80%</Text>
+                <Text style={styles.progressValue}>{levelInfo.currentLevelXp} / {levelInfo.requiredXp} XP</Text>
+                <Text style={styles.progressPercent}>{Math.round(levelInfo.progress)}%</Text>
             </View>
         </View>
       </View>

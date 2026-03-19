@@ -16,6 +16,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { checkMuscleMaster } from '../utils/achievementManager';
 
 const { width } = Dimensions.get('window');
 
@@ -71,6 +72,10 @@ export default function WorkoutCompleteScreen() {
                 [day as string]: true
               }
             }, { merge: true });
+
+            // Check Muscle Master achievement locally
+            await checkMuscleMaster();
+
             console.log("Progress saved successfully!");
           } catch (e) {
             console.error("Error saving progress:", e);
