@@ -201,6 +201,13 @@ export default function QuickActionsOverlay({ visible, onClose }: QuickActionsOv
               iconName="calendar-today" 
               onPress={() => handleActionPress('/screens/MonthlyWorkoutLibraryScreen')}
           />
+          <QuickActionButton 
+              title="Community" 
+              subtitle="" 
+              IconComponent={MaterialIcons} 
+              iconName="store" 
+              onPress={() => handleActionPress('/screens/CommunityMarketplaceScreen')}
+          />
         </View>
 
         <View style={styles.closeButtonContainer}>

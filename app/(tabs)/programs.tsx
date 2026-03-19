@@ -255,17 +255,29 @@ export default function ProgramsScreen() {
 
         {/* Create Custom Program Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>CREATE CUSTOM</Text>
-          <TouchableOpacity 
-              style={styles.quickActionCard}
-              onPress={() => router.push('/screens/CreateCustomWorkoutScreen')}
-          >
-            <View style={styles.quickActionIcon}>
-              <Feather name="edit" size={32} color="#ccff00" />
-            </View>
-            <Text style={styles.quickActionTitle}>Custom Workout</Text>
-            <Text style={styles.quickActionSubtitle}>Design your own routine</Text>
-          </TouchableOpacity>
+          <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
+          <View style={styles.quickActionsGrid}>
+            <TouchableOpacity 
+                style={styles.quickActionCard}
+                onPress={() => router.push('/screens/CreateCustomWorkoutScreen')}
+            >
+              <View style={styles.quickActionIcon}>
+                <Feather name="edit" size={32} color="#ccff00" />
+              </View>
+              <Text style={styles.quickActionTitle}>Custom Workout</Text>
+              <Text style={styles.quickActionSubtitle}>Design your own routine</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+                style={styles.quickActionCard}
+                onPress={() => router.push('/screens/CommunityMarketplaceScreen')}
+            >
+              <View style={styles.quickActionIcon}>
+                <MaterialCommunityIcons name="store" size={32} color="#ccff00" />
+              </View>
+              <Text style={styles.quickActionTitle}>Community</Text>
+              <Text style={styles.quickActionSubtitle}>Browse shared workouts</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         
         {/* Recommended Section */}
