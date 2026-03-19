@@ -319,14 +319,7 @@ export default function ProgramsScreen() {
 
         {/* Bottom Padding */}
         <View style={{ height: 100 }} />
-
       </ScrollView>
-
-      {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab}>
-        <Feather name="plus" size={32} color="#1f230f" />
-      </TouchableOpacity>
-
     </SafeAreaView>
   );
 }
@@ -609,25 +602,5 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 110, // Adjusted for TabBar
-    right: 24,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#ccff00',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: "#ccff00",
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-    zIndex: 100,
-  },
+  }
 });
