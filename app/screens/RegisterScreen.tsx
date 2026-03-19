@@ -33,6 +33,15 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [nameError, setNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  const validateEmail = (email: string) => {
+    const re = /\S+@\S+\.\S+/;
+    return re.test(email);
+  };
+
   useEffect(() => {
     GoogleSignin.configure({
       webClientId: '802032521156-plrtru1qe837u5cr60nl2p5jtsik201b.apps.googleusercontent.com',
@@ -66,10 +75,26 @@ export default function RegisterScreen() {
   }
 
   const handleRegister = async () => {
-    if (!fullName || !email || !password || !confirmPassword) {
-      Alert.alert('Hata', 'Lütfen tüm alanları doldurun.');
-      return;
+    let isValid = true;
+    setNameError('');
+    setEmailError('');
+    setPasswordError('');
+
+    if (fullName.trim().length < 3) {
+      setNameError('Minimum 3 harfli olmalı');
+      isValid = false;
     }
+    if (!email.trim() || !validateEmail(email)) {
+      setEmailError('Düzgün e-posta giriniz');
+      isValid = false;
+    }
+    if (password.length < 6) {
+      setPasswordError('Minimum 6 harfli olmalı');
+      isValid = false;
+    }
+
+    if (!isValid) return;
+
     if (password !== confirmPassword) {
       Alert.alert('Hata', 'Şifreler eşleşmiyor.');
       return;
@@ -130,42 +155,60 @@ export default function RegisterScreen() {
             
             {/* Full Name */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Full Name</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>Full Name</Text>
+                {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+              </View>
               <TextInput 
-                style={styles.input}
+                style={[styles.input, nameError ? styles.inputError : null]}
                 placeholder="Cavid Əliyev / John Doe"
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="words"
                 value={fullName}
-                onChangeText={setFullName}
+                onChangeText={(text) => {
+                  setFullName(text);
+                  if (nameError) setNameError('');
+                }}
               />
             </View>
 
             {/* Email */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>Email</Text>
+                {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+              </View>
               <TextInput 
-                style={styles.input}
+                style={[styles.input, emailError ? styles.inputError : null]}
                 placeholder="example@fitflow.com"
                 placeholderTextColor={colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (emailError) setEmailError('');
+                }}
               />
             </View>
 
             {/* Password */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>Password</Text>
+                {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+              </View>
               <View style={styles.passwordContainer}>
                 <TextInput 
-                  style={[styles.input, { flex: 1, paddingRight: 50 }]}
+                  style={[styles.input, passwordError ? styles.inputError : null, { flex: 1, paddingRight: 50 }]}
                   placeholder="••••••••"
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry={!passwordVisible}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (passwordError) setPasswordError('');
+                  }}
                 />
                 <TouchableOpacity 
                   style={styles.eyeIcon} 
@@ -309,11 +352,21 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 16,
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   label: {
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
     color: colors.textMain,
-    marginBottom: 8,
+  },
+  errorText: {
+    color: '#ff4444',
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
   },
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -325,6 +378,10 @@ const styles = StyleSheet.create({
     color: colors.textMain,
     fontSize: 16,
     fontFamily: 'Inter_400Regular',
+  },
+  inputError: {
+    borderColor: '#ff4444',
+    backgroundColor: 'rgba(255, 68, 68, 0.05)',
   },
   passwordContainer: {
     position: 'relative',

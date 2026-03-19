@@ -15,7 +15,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  Modal
 } from 'react-native';
 import GoogleIcon from '@/components/GoogleIcon';
 
@@ -25,6 +26,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
 
   useEffect(() => {
     GoogleSignin.configure({
@@ -61,7 +63,7 @@ export default function LoginScreen() {
   // Normal login fonksiyonu
   const handleNormalLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Hata', 'Lütfen e-posta ve şifrenizi girin.');
+      setErrorModalVisible(true);
       return;
     }
     setLoading(true);
@@ -93,7 +95,7 @@ export default function LoginScreen() {
       }
     } catch (error: any) {
       console.error(error);
-      Alert.alert('Giriş Hatası', error.message || 'Giriş yapılamadı.');
+      setErrorModalVisible(true);
     } finally {
       setLoading(false);
     }
@@ -105,6 +107,68 @@ export default function LoginScreen() {
       
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
+        {/* Error Modal */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={errorModalVisible}
+          onRequestClose={() => setErrorModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              
+              {/* Warning Icon */}
+              <View style={styles.warningIconContainer}>
+                <View style={styles.warningIconGlow} />
+                <View style={styles.warningIconInner}>
+                  <MaterialIcons name="warning" size={48} color={colors.primary} />
+                </View>
+              </View>
+
+              {/* Title */}
+              <Text style={styles.modalTitle}>
+                Login <Text style={styles.modalTitleHighlight}>Failed</Text>
+              </Text>
+
+              {/* Message */}
+              <Text style={styles.modalMessage}>
+                Incorrect email or password. Please try again or reset your password.
+              </Text>
+
+              {/* Action Buttons */}
+              <View style={styles.modalActions}>
+                <TouchableOpacity 
+                  style={styles.tryAgainButton}
+                  onPress={() => setErrorModalVisible(false)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.tryAgainText}>TRY AGAIN</Text>
+                  <MaterialIcons name="refresh" size={20} color={colors.backgroundDark} />
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.modalForgotButton}
+                  onPress={() => {
+                    setErrorModalVisible(false);
+                    router.push('/screens/ForgotPasswordScreen');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.modalForgotText}>FORGOT PASSWORD?</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Decorative Line */}
+              <View style={styles.modalDecoration}>
+                <View style={styles.modalDecoLine} />
+                <Text style={styles.modalDecoText}>SYSTEM.ERROR_0x401</Text>
+                <View style={styles.modalDecoLine} />
+              </View>
+
+            </View>
+          </View>
+        </Modal>
+
         {/* Top Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.replace('/')} style={styles.backButton}>
@@ -387,5 +451,121 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 14,
     fontFamily: 'Inter_700Bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#1e2114',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(71, 73, 60, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  warningIconContainer: {
+    marginBottom: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  warningIconGlow: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    backgroundColor: 'rgba(204, 255, 0, 0.15)',
+    borderRadius: 40,
+  },
+  warningIconInner: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#242719',
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.3)',
+  },
+  modalTitle: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: colors.textMain,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+    fontFamily: 'Inter_700Bold',
+    fontStyle: 'italic',
+    letterSpacing: -1,
+  },
+  modalTitleHighlight: {
+    color: colors.primary,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+    fontFamily: 'Inter_400Regular',
+    paddingHorizontal: 16,
+  },
+  modalActions: {
+    width: '100%',
+    gap: 16,
+  },
+  tryAgainButton: {
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    height: 56,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tryAgainText: {
+    color: colors.backgroundDark,
+    fontSize: 14,
+    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 1,
+  },
+  modalForgotButton: {
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalForgotText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 1,
+  },
+  modalDecoration: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 32,
+    opacity: 0.3,
+  },
+  modalDecoLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.textMuted,
+  },
+  modalDecoText: {
+    fontSize: 10,
+    color: colors.textMuted,
+    letterSpacing: 4,
+    paddingHorizontal: 16,
+    textTransform: 'uppercase',
+    fontFamily: 'Inter_400Regular',
   },
 });
