@@ -419,7 +419,7 @@ export default function DashboardScreen() {
               <View style={[styles.actionIconContainer, { backgroundColor: isDark ? '#1e293b' : '#e2e8f0' }]}>
                 <MaterialIcons name="fitness-center" size={24} color={currentTheme.text} />
               </View>
-              <Text style={[styles.actionText, { color: currentTheme.text }]}>Workout Library</Text>
+              <Text style={[styles.actionText, { color: currentTheme.text }]}>Workouts Library</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>

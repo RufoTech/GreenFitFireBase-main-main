@@ -1,23 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
-  View,
-  SafeAreaView,
-  StatusBar,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
   TextInput,
-  Image,
-  Dimensions,
-  ActivityIndicator,
-  Alert
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import firestore from '@react-native-firebase/firestore';
-import auth from '@react-native-firebase/auth';
 
 const { width } = Dimensions.get('window');
 
@@ -48,8 +48,8 @@ export default function ProgramLibraryScreen() {
     // Mock user ID
     const user = auth().currentUser;
     if (!user) {
-        setLoading(false);
-        return;
+      setLoading(false);
+      return;
     }
     const userId = user.uid;
 
@@ -82,40 +82,40 @@ export default function ProgramLibraryScreen() {
   }, []);
 
   const handleDelete = (workoutId: string) => {
-      Alert.alert(
-          "Delete Workout",
-          "Are you sure you want to delete this workout?",
-          [
-              { text: "Cancel", style: "cancel" },
-              { 
-                  text: "Delete", 
-                  style: "destructive",
-                  onPress: async () => {
-                      try {
-                          await firestore().collection('saved_workouts').doc(workoutId).delete();
-                          // No need to manually update state as onSnapshot handles it
-                      } catch (error) {
-                          console.error("Error deleting saved workout:", error);
-                          Alert.alert("Error", "Failed to delete workout.");
-                      }
-                  }
-              }
-          ]
-      );
+    Alert.alert(
+      "Delete Workout",
+      "Are you sure you want to delete this workout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await firestore().collection('saved_workouts').doc(workoutId).delete();
+              // No need to manually update state as onSnapshot handles it
+            } catch (error) {
+              console.error("Error deleting saved workout:", error);
+              Alert.alert("Error", "Failed to delete workout.");
+            }
+          }
+        }
+      ]
+    );
   };
 
-  const filteredWorkouts = savedWorkouts.filter(workout => 
-    workout.title.toLowerCase().includes(search.toLowerCase()) || 
+  const filteredWorkouts = savedWorkouts.filter(workout =>
+    workout.title.toLowerCase().includes(search.toLowerCase()) ||
     workout.muscle.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={BG_DARK} />
-      
+
       {/* Top App Bar */}
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
@@ -142,76 +142,76 @@ export default function ProgramLibraryScreen() {
           />
         </View>
       </View>
-      
+
       {/* Workout List */}
-      <ScrollView 
-        style={styles.scrollView} 
+      <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       >
         {loading ? (
-            <ActivityIndicator size="large" color={PRIMARY} style={{ marginTop: 40 }} />
+          <ActivityIndicator size="large" color={PRIMARY} style={{ marginTop: 40 }} />
         ) : (
-            <View style={styles.workoutsList}>
+          <View style={styles.workoutsList}>
             {filteredWorkouts.length === 0 ? (
-                <Text style={{ color: SUBTEXT_COLOR, textAlign: 'center', marginTop: 40 }}>
-                    No workouts saved yet.
-                </Text>
+              <Text style={{ color: SUBTEXT_COLOR, textAlign: 'center', marginTop: 40 }}>
+                No workouts savssed yet.
+              </Text>
             ) : (
-                filteredWorkouts.map((item) => (
-                    <TouchableOpacity 
-                    key={item.id} 
-                    style={styles.workoutCard}
-                    activeOpacity={0.9}
-                    >
-                    <View style={styles.workoutInfo}>
-                        <View style={styles.workoutHeader}>
-                            <View style={styles.levelBadge}>
-                                <Text style={styles.levelText}>{item.level}</Text>
-                            </View>
-                        </View>
-                        
-                        <Text style={styles.workoutTitle}>{item.title}</Text>
-                        
-                        <View style={styles.workoutMetaContainer}>
-                            <View style={styles.metaItem}>
-                                <MaterialIcons name="fitness-center" size={14} color={SUBTEXT_COLOR} />
-                                <Text style={styles.metaText}>{item.muscle}</Text>
-                            </View>
-                            <View style={styles.metaItem}>
-                                <MaterialIcons name="list-alt" size={14} color={SUBTEXT_COLOR} />
-                                <Text style={styles.metaText}>{item.exerciseCount} Exercises</Text>
-                            </View>
-                            <View style={styles.metaItem}>
-                                <MaterialIcons name="schedule" size={14} color={SUBTEXT_COLOR} />
-                                <Text style={styles.metaText}>{item.duration} min</Text>
-                            </View>
-                        </View>
+              filteredWorkouts.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.workoutCard}
+                  activeOpacity={0.9}
+                >
+                  <View style={styles.workoutInfo}>
+                    <View style={styles.workoutHeader}>
+                      <View style={styles.levelBadge}>
+                        <Text style={styles.levelText}>{item.level}</Text>
+                      </View>
+                    </View>
 
-                        <TouchableOpacity 
-                            style={styles.startButton}
-                            onPress={() => {
-                                // Navigation removed as requested
-                            }}
-                        >
-                            <MaterialIcons name="play-arrow" size={20} color={BG_DARK} />
-                            <Text style={styles.startButtonText}>Start Workout</Text>
-                        </TouchableOpacity>
+                    <Text style={styles.workoutTitle}>{item.title}</Text>
+
+                    <View style={styles.workoutMetaContainer}>
+                      <View style={styles.metaItem}>
+                        <MaterialIcons name="fitness-center" size={14} color={SUBTEXT_COLOR} />
+                        <Text style={styles.metaText}>{item.muscle}</Text>
+                      </View>
+                      <View style={styles.metaItem}>
+                        <MaterialIcons name="list-alt" size={14} color={SUBTEXT_COLOR} />
+                        <Text style={styles.metaText}>{item.exerciseCount} Exercises</Text>
+                      </View>
+                      <View style={styles.metaItem}>
+                        <MaterialIcons name="schedule" size={14} color={SUBTEXT_COLOR} />
+                        <Text style={styles.metaText}>{item.duration} min</Text>
+                      </View>
                     </View>
-                    
-                    <View style={styles.workoutImageContainer}>
-                        <Image source={{ uri: item.image }} style={styles.workoutImage} />
-                        <TouchableOpacity 
-                            style={styles.deleteButton}
-                            onPress={() => handleDelete(item.id)}
-                        >
-                            <MaterialIcons name="delete" size={18} color="#ef4444" />
-                        </TouchableOpacity>
-                    </View>
+
+                    <TouchableOpacity
+                      style={styles.startButton}
+                      onPress={() => {
+                        // Navigation removed as requested
+                      }}
+                    >
+                      <MaterialIcons name="play-arrow" size={20} color={BG_DARK} />
+                      <Text style={styles.startButtonText}>Start Workout</Text>
                     </TouchableOpacity>
-                ))
+                  </View>
+
+                  <View style={styles.workoutImageContainer}>
+                    <Image source={{ uri: item.image }} style={styles.workoutImage} />
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDelete(item.id)}
+                    >
+                      <MaterialIcons name="delete" size={18} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              ))
             )}
-            </View>
+          </View>
         )}
         <View style={{ height: 100 }} />
       </ScrollView>
