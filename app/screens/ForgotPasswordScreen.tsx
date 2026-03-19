@@ -1,9 +1,10 @@
 import { colors } from '@/constants/theme';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import auth from '@react-native-firebase/auth';
 import React, { useState } from 'react';
-import * as IntentLauncher from 'expo-intent-launcher';
+import { openInbox } from 'react-native-email-link';
 import {
   Alert,
   Image,
@@ -26,35 +27,21 @@ export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [invalidEmailModalVisible, setInvalidEmailModalVisible] = useState(false);
 
   const handleOpenEmailApp = async () => {
     try {
-      if (Platform.OS === 'android') {
-        // Android'de intent kullanarak mail uygulamasını açmaya çalış
-        const activityAction = 'android.intent.action.MAIN';
-        const intentParams = {
-          category: 'android.intent.category.APP_EMAIL',
-        };
-        await IntentLauncher.startActivityAsync(activityAction, intentParams);
-      } else {
-        // iOS ve diğer platformlarda 'mailto:' protokolüyle aç
-        const mailtoUrl = 'message://'; // iOS için message:// daha stabil olabilir
-        const fallbackUrl = 'mailto:';
-        
-        const canOpenMessage = await Linking.canOpenURL(mailtoUrl);
-        if (canOpenMessage) {
+      await openInbox();
+    } catch {
+      const mailtoUrl = 'mailto:';
+      try {
+        const supported = await Linking.canOpenURL(mailtoUrl);
+        if (supported) {
           await Linking.openURL(mailtoUrl);
-        } else {
-          const canOpenMailto = await Linking.canOpenURL(fallbackUrl);
-          if (canOpenMailto) {
-            await Linking.openURL(fallbackUrl);
-          } else {
-            throw new Error('Email app not found');
-          }
+          return;
         }
+      } catch {
       }
-    } catch (error) {
-      console.log('Error opening email app:', error);
       Alert.alert(
         'Open Email App',
         'Could not open your email app automatically. Please open your email app manually and check your inbox.'
@@ -75,7 +62,8 @@ export default function ForgotPasswordScreen() {
       console.error(error);
       let errorMessage = 'Failed to send reset link. Please try again.';
       if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address format.';
+        setInvalidEmailModalVisible(true);
+        return;
       } else if (error.code === 'auth/user-not-found') {
         errorMessage = 'No user found with this email.';
       }
@@ -145,6 +133,64 @@ export default function ForgotPasswordScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={invalidEmailModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setInvalidEmailModalVisible(false)}
+      >
+        <View style={styles.errorModalBackdrop}>
+          <View style={styles.errorModalHeader}>
+            <View style={styles.errorModalHeaderLeft}>
+              <TouchableOpacity
+                onPress={() => setInvalidEmailModalVisible(false)}
+                accessibilityLabel="Close"
+                style={styles.errorModalCloseButton}
+              >
+                <MaterialIcons name="close" size={22} color={colors.primary} />
+              </TouchableOpacity>
+              <Text style={styles.errorModalHeaderTitle}>AUTHENTICATION</Text>
+            </View>
+          </View>
+
+          <View style={styles.errorModalCard}>
+            <View style={styles.errorModalStack}>
+              <View style={styles.errorModalIconGlow} />
+              <View style={styles.errorModalIconCircle}>
+                <MaterialIcons name="error" size={40} color={colors.primary} />
+              </View>
+
+              <View style={styles.errorModalTextStack}>
+                <Text style={styles.errorModalTitle}>INVALID EMAIL FORMAT</Text>
+                <Text style={styles.errorModalDescription}>
+                  Please enter a valid email address (e.g.,{' '}
+                  <Text style={styles.errorModalExample}>name@example.com</Text>) to continue.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setInvalidEmailModalVisible(false)}
+                style={styles.errorModalPrimaryButton}
+              >
+                <LinearGradient
+                  colors={["#f3ffca", colors.primary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.errorModalPrimaryGradient}
+                >
+                  <Text style={styles.errorModalPrimaryText}>GOT IT</Text>
+                  <MaterialIcons name="arrow-forward" size={20} color={colors.backgroundDark} />
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <View style={styles.errorModalTopRightAccent} />
+              <View style={styles.errorModalBottomAccent} />
+            </View>
+          </View>
+        </View>
+      </Modal>
       
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -210,7 +256,7 @@ export default function ForgotPasswordScreen() {
                 style={[styles.submitButton, loading && { opacity: 0.7 }]}
                 activeOpacity={0.9}
                 onPress={handleSendResetLink}
-                disabled={loading || successModalVisible}
+                disabled={loading || successModalVisible || invalidEmailModalVisible}
               >
                 <Text style={styles.submitButtonText}>{loading ? 'Sending...' : 'Send Reset Link'}</Text>
                 {!loading && <MaterialIcons name="send" size={20} color={colors.backgroundDark} />}
@@ -376,6 +422,149 @@ const styles = StyleSheet.create({
     letterSpacing: 1.8,
     textTransform: 'uppercase',
     fontFamily: 'Inter_800ExtraBold',
+  },
+  errorModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(13, 15, 6, 0.80)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  errorModalHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 72,
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+  },
+  errorModalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  errorModalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  errorModalHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 2,
+    color: colors.primary,
+    textTransform: 'uppercase',
+    fontFamily: 'Inter_800ExtraBold',
+  },
+  errorModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    shadowColor: colors.primary,
+    shadowOpacity: 0.20,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  errorModalStack: {
+    paddingHorizontal: 28,
+    paddingVertical: 32,
+    alignItems: 'center',
+  },
+  errorModalIconGlow: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 220,
+    backgroundColor: 'rgba(204, 255, 0, 0.18)',
+    top: -30,
+    opacity: 0.6,
+  },
+  errorModalIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  errorModalTextStack: {
+    alignItems: 'center',
+    marginBottom: 22,
+  },
+  errorModalTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.6,
+    textTransform: 'uppercase',
+    color: colors.textMain,
+    fontFamily: 'Inter_800ExtraBold',
+    textAlign: 'center',
+  },
+  errorModalDescription: {
+    marginTop: 10,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    maxWidth: 280,
+    fontFamily: 'Inter_400Regular',
+  },
+  errorModalExample: {
+    color: colors.textMain,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  errorModalPrimaryButton: {
+    width: '100%',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  errorModalPrimaryGradient: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  errorModalPrimaryText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    fontFamily: 'Inter_800ExtraBold',
+  },
+  errorModalTopRightAccent: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 72,
+    height: 72,
+    backgroundColor: 'rgba(204, 255, 0, 0.06)',
+    borderBottomLeftRadius: 72,
+  },
+  errorModalBottomAccent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    width: 120,
+    height: 4,
+    backgroundColor: colors.primary,
+    opacity: 0.25,
   },
   scrollContent: {
     flexGrow: 1,
