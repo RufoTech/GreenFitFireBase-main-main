@@ -308,7 +308,8 @@ export default function AddWorkoutScreen() {
                     pathname: '/screens/WorkoutDetailsScreen',
                     params: { 
                       id: workout.id,
-                      isCustom: workout.category === 'Custom' ? 'true' : 'false'
+                      isCustom: workout.category === 'Custom' ? 'true' : 'false',
+                      fromLibrary: workout.category !== 'Custom' ? 'true' : 'false'
                     }
                   })}
                 >
@@ -370,7 +371,8 @@ export default function AddWorkoutScreen() {
                   pathname: '/screens/WorkoutDetailsScreen',
                   params: { 
                     id: workout.id,
-                    isCustom: workout.category === 'Custom' ? 'true' : 'false'
+                    isCustom: workout.category === 'Custom' ? 'true' : 'false',
+                    fromLibrary: workout.category !== 'Custom' ? 'true' : 'false'
                   }
                 })}
               >
