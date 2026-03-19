@@ -3,10 +3,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import auth from '@react-native-firebase/auth';
 import React, { useState } from 'react';
+import * as IntentLauncher from 'expo-intent-launcher';
 import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -22,6 +25,42 @@ export default function ForgotPasswordScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+
+  const handleOpenEmailApp = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        // Android'de intent kullanarak mail uygulamasını açmaya çalış
+        const activityAction = 'android.intent.action.MAIN';
+        const intentParams = {
+          category: 'android.intent.category.APP_EMAIL',
+        };
+        await IntentLauncher.startActivityAsync(activityAction, intentParams);
+      } else {
+        // iOS ve diğer platformlarda 'mailto:' protokolüyle aç
+        const mailtoUrl = 'message://'; // iOS için message:// daha stabil olabilir
+        const fallbackUrl = 'mailto:';
+        
+        const canOpenMessage = await Linking.canOpenURL(mailtoUrl);
+        if (canOpenMessage) {
+          await Linking.openURL(mailtoUrl);
+        } else {
+          const canOpenMailto = await Linking.canOpenURL(fallbackUrl);
+          if (canOpenMailto) {
+            await Linking.openURL(fallbackUrl);
+          } else {
+            throw new Error('Email app not found');
+          }
+        }
+      }
+    } catch (error) {
+      console.log('Error opening email app:', error);
+      Alert.alert(
+        'Open Email App',
+        'Could not open your email app automatically. Please open your email app manually and check your inbox.'
+      );
+    }
+  };
 
   const handleSendResetLink = async () => {
     if (!email) {
@@ -31,9 +70,7 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     try {
       await auth().sendPasswordResetEmail(email);
-      Alert.alert('Success', 'Password reset link sent to your email', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      setSuccessModalVisible(true);
     } catch (error: any) {
       console.error(error);
       let errorMessage = 'Failed to send reset link. Please try again.';
@@ -51,6 +88,63 @@ export default function ForgotPasswordScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.backgroundDark} />
+
+      <Modal
+        visible={successModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSuccessModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalKineticLayer}>
+            <View style={styles.modalKineticBlobA} />
+            <View style={styles.modalKineticBlobB} />
+          </View>
+
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalBrand}>GREENFIT</Text>
+          </View>
+
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconOuterGlow} />
+            <View style={styles.modalIconCard}>
+              <MaterialIcons name="mark-email-read" size={56} color={colors.primary} />
+            </View>
+
+            <View style={styles.modalTextBlock}>
+              <Text style={styles.modalTitle}>
+                LINK <Text style={styles.modalTitleHighlight}>SENT!</Text>
+              </Text>
+              <Text style={styles.modalDescription}>
+                We have sent a password reset link to your email address. Please follow the instructions to get back to your workout.
+              </Text>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalPrimaryButton}
+                activeOpacity={0.9}
+                onPress={handleOpenEmailApp}
+              >
+                <Text style={styles.modalPrimaryButtonText}>OPEN EMAIL APP</Text>
+                <MaterialIcons name="open-in-new" size={18} color={colors.backgroundDark} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalSecondaryButton}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setSuccessModalVisible(false);
+                  router.back();
+                }}
+              >
+                <MaterialIcons name="arrow-back" size={18} color={colors.textSecondary} />
+                <Text style={styles.modalSecondaryButtonText}>Back to Login</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -116,7 +210,7 @@ export default function ForgotPasswordScreen() {
                 style={[styles.submitButton, loading && { opacity: 0.7 }]}
                 activeOpacity={0.9}
                 onPress={handleSendResetLink}
-                disabled={loading}
+                disabled={loading || successModalVisible}
               >
                 <Text style={styles.submitButtonText}>{loading ? 'Sending...' : 'Send Reset Link'}</Text>
                 {!loading && <MaterialIcons name="send" size={20} color={colors.backgroundDark} />}
@@ -146,6 +240,142 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.backgroundDark,
     paddingTop: Platform.OS === 'android' ? 25 : 0,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+  },
+  modalKineticLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalKineticBlobA: {
+    position: 'absolute',
+    width: 520,
+    height: 520,
+    borderRadius: 520,
+    left: -240,
+    top: -180,
+    backgroundColor: 'rgba(204, 255, 0, 0.10)',
+    opacity: 0.35,
+  },
+  modalKineticBlobB: {
+    position: 'absolute',
+    width: 520,
+    height: 520,
+    borderRadius: 520,
+    right: -240,
+    bottom: -220,
+    backgroundColor: 'rgba(204, 255, 0, 0.08)',
+    opacity: 0.25,
+  },
+  modalHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBrand: {
+    color: colors.primary,
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.6,
+    fontStyle: 'italic',
+    fontFamily: 'Inter_800ExtraBold',
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 480,
+    alignItems: 'center',
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
+  modalIconOuterGlow: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 220,
+    backgroundColor: 'rgba(204, 255, 0, 0.16)',
+    top: -6,
+    opacity: 0.6,
+  },
+  modalIconCard: {
+    width: 96,
+    height: 96,
+    borderRadius: 16,
+    backgroundColor: '#0f1207',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTextBlock: {
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  modalTitle: {
+    fontSize: 44,
+    fontWeight: '900',
+    letterSpacing: -1.2,
+    textTransform: 'uppercase',
+    color: colors.textMain,
+    fontFamily: 'Inter_800ExtraBold',
+  },
+  modalTitleHighlight: {
+    color: colors.primary,
+    fontStyle: 'italic',
+  },
+  modalDescription: {
+    marginTop: 16,
+    fontSize: 16,
+    lineHeight: 24,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: 12,
+    fontFamily: 'Inter_400Regular',
+  },
+  modalActions: {
+    width: '100%',
+    gap: 14,
+  },
+  modalPrimaryButton: {
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  modalPrimaryButtonText: {
+    color: colors.backgroundDark,
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    fontFamily: 'Inter_800ExtraBold',
+  },
+  modalSecondaryButton: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  modalSecondaryButtonText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    fontFamily: 'Inter_800ExtraBold',
   },
   scrollContent: {
     flexGrow: 1,
