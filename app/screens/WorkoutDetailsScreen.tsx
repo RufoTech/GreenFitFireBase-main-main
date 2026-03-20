@@ -69,6 +69,7 @@ export default function WorkoutDetailsScreen() {
   const [isSaved, setIsSaved] = useState(false);
   const [savedDocId, setSavedDocId] = useState<string | null>(null);
   const [showLimitAlert, setShowLimitAlert] = useState(false);
+  const [isShared, setIsShared] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -95,6 +96,23 @@ export default function WorkoutDetailsScreen() {
          }
        } catch (err) {
          console.error("Error checking saved status:", err);
+       }
+    };
+
+    const checkSharedStatus = async () => {
+       if (!userId) return;
+       try {
+           const shareSnap = await firestore()
+               .collection('community_shared_workouts')
+               .where('originalId', '==', String(id))
+               .where('authorId', '==', userId)
+               .limit(1)
+               .get();
+           if (!shareSnap.empty) {
+               setIsShared(true);
+           }
+       } catch (err) {
+           console.error("Error checking shared status:", err);
        }
     };
 
@@ -212,6 +230,7 @@ export default function WorkoutDetailsScreen() {
 
     checkSavedStatus();
     fetchWorkoutDetails();
+    checkSharedStatus();
   }, [id, isCustom]);
 
   const handleToggleLibrary = async () => {
@@ -301,13 +320,18 @@ export default function WorkoutDetailsScreen() {
               });
 
               if (!response.ok) {
+                if (response.status === 403) {
+                  const errorText = await response.text();
+                  throw new Error(errorText.trim());
+                }
                 throw new Error('Failed to share workout');
               }
 
+              setIsShared(true);
               Alert.alert("Success", "Your workout has been shared with the community!");
-            } catch (error) {
+            } catch (error: any) {
               console.error("Error sharing workout:", error);
-              Alert.alert("Error", "Failed to share workout.");
+              Alert.alert("DİQQƏT!", error.message || "Failed to share workout.");
             }
           }
         }
@@ -375,14 +399,20 @@ export default function WorkoutDetailsScreen() {
             <MaterialIcons name="arrow-back" size={24} color="#f1f5f9" />
          </TouchableOpacity>
          <Text style={styles.navTitle}>Workout Details</Text>
-         <View style={{ flexDirection: 'row', gap: 8 }}>
+         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
            {fromLibrary !== 'true' && (
-            <TouchableOpacity 
-               style={styles.navButton}
-               onPress={handleCommunityShare}
-            >
-               <MaterialIcons name="public" size={24} color="#f1f5f9" />
-            </TouchableOpacity>
+             isShared ? (
+               <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(34, 197, 94, 0.3)' }}>
+                 <Text style={{ color: '#22c55e', fontSize: 12, fontWeight: '700' }}>Shared</Text>
+               </View>
+             ) : (
+                <TouchableOpacity 
+                   style={styles.navButton}
+                   onPress={handleCommunityShare}
+                >
+                   <MaterialIcons name="public" size={24} color="#f1f5f9" />
+                </TouchableOpacity>
+             )
            )}
            {fromLibrary !== 'true' && (
             <TouchableOpacity 

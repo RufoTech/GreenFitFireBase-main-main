@@ -543,6 +543,19 @@ func shareProgramToCommunityHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
+	// 0. Check maximum share limit (5 items max)
+	iter := firestoreClient.Collection("community_shared_programs").Where("authorId", "==", uid).Documents(ctx)
+	snaps, err := iter.GetAll()
+	if err != nil {
+		log.Printf("Error counting shared programs: %v", err)
+		http.Error(w, "Failed to verify share limits", http.StatusInternalServerError)
+		return
+	}
+	if len(snaps) >= 5 {
+		http.Error(w, "Maksimum 5 ədəd paylaşa bilərsiniz", http.StatusForbidden)
+		return
+	}
+
 	// Prepare data for community_shared_programs
 	sharedData := map[string]interface{}{
 		"originalId":    payload.OriginalId,
@@ -605,6 +618,19 @@ func shareWorkoutToCommunityHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
+
+	// 0. Check maximum share limit (5 items max)
+	iter := firestoreClient.Collection("community_shared_workouts").Where("authorId", "==", uid).Documents(ctx)
+	snaps, err := iter.GetAll()
+	if err != nil {
+		log.Printf("Error counting shared workouts: %v", err)
+		http.Error(w, "Failed to verify share limits", http.StatusInternalServerError)
+		return
+	}
+	if len(snaps) >= 5 {
+		http.Error(w, "Maksimum 5 ədəd paylaşa bilərsiniz", http.StatusForbidden)
+		return
+	}
 
 	// Prepare data for community_shared_workouts
 	sharedData := map[string]interface{}{

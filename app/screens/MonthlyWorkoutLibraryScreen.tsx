@@ -350,15 +350,19 @@ export default function MonthlyWorkoutLibraryScreen() {
               });
 
               if (!response.ok) {
+                if (response.status === 403) {
+                  const errorText = await response.text();
+                  throw new Error(errorText.trim());
+                }
                 throw new Error('Failed to share program');
               }
 
               // Mark as shared locally
               setSharedProgramIds(prev => new Set(prev).add(program.id));
               Alert.alert("Success", "Your program has been shared with the community!");
-            } catch (error) {
+            } catch (error: any) {
               console.error("Error sharing program:", error);
-              Alert.alert("Error", "Failed to share program. Please try again.");
+              Alert.alert("DİQQƏT!", error.message || "Failed to share program. Please try again.");
             }
           }
         }
