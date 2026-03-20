@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Platform, Statu
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PRIMARY = "#ccff00";
@@ -148,11 +149,25 @@ export default function AddMealScreen() {
   useEffect(() => {
     const fetchFoods = async () => {
       try {
+        setLoading(true);
+        // Fetch global foods
         const snapshot = await firestore().collection('foods').get();
-        const foodList = snapshot.docs.map(doc => ({
+        let foodList = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
+
+        // Fetch custom user foods
+        const user = auth().currentUser;
+        if (user) {
+          const customSnapshot = await firestore().collection('customUserFoods').where('userId', '==', user.uid).get();
+          const customFoods = customSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            isCustom: true
+          }));
+          foodList = [...foodList, ...customFoods];
+        }
         
         // Extract unique categories
         const uniqueCategories = Array.from(new Set(foodList.map((item: any) => item.category).filter(Boolean))) as string[];
@@ -171,7 +186,7 @@ export default function AddMealScreen() {
     };
     
     fetchFoods();
-  }, []);
+  }, [isOldUiVisible]);
 
   const getFilteredFoods = () => {
     let filtered = foods;
@@ -648,6 +663,19 @@ export default function AddMealScreen() {
                         </ScrollView>
                     )}
                 </View>
+            </View>
+
+            <View style={{ paddingHorizontal: 16, marginBottom: 12, flexDirection: 'row', justifyContent: 'flex-end' }}>
+                <TouchableOpacity 
+                    style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(204,255,0,0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(204,255,0,0.3)' }}
+                    onPress={() => { 
+                        setIsOldUiVisible(false); 
+                        router.push('/screens/CreateCustomFoodScreen'); 
+                    }}
+                >
+                    <MaterialIcons name="add-circle-outline" size={16} color="#ccff00" />
+                    <Text style={{ color: '#ccff00', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>CREATE CUSTOM FOOD</Text>
+                </TouchableOpacity>
             </View>
 
             {/* Content Section */}
