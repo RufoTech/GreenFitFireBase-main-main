@@ -3,6 +3,8 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
     Image,
+    KeyboardAvoidingView,
+    Modal,
     Platform,
     SafeAreaView,
     ScrollView,
@@ -27,6 +29,7 @@ const OUTLINE = "#757768";
 export default function FriendsScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('Following');
+  const [isAddFriendModalVisible, setIsAddFriendModalVisible] = useState(false);
 
   const friends = [
     {
@@ -95,7 +98,11 @@ export default function FriendsScreen() {
             </TouchableOpacity>
           </View>
           
-          <TouchableOpacity style={styles.addFriendButton} activeOpacity={0.8}>
+          <TouchableOpacity 
+            style={styles.addFriendButton} 
+            activeOpacity={0.8}
+            onPress={() => setIsAddFriendModalVisible(true)}
+          >
             <MaterialIcons name="person-add" size={20} color={BG_DARK} />
             <Text style={styles.addFriendText}>ADD FRIEND</Text>
           </TouchableOpacity>
@@ -157,6 +164,59 @@ export default function FriendsScreen() {
         </View>
 
       </ScrollView>
+
+      {/* Add Friend Modal */}
+      <Modal
+        visible={isAddFriendModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsAddFriendModalVisible(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity 
+            style={styles.modalBackground} 
+            activeOpacity={1} 
+            onPress={() => setIsAddFriendModalVisible(false)}
+          />
+          
+          <View style={styles.modalContent}>
+            {/* Search Input Container */}
+            <View style={styles.modalSearchContainer}>
+              <MaterialIcons name="search" size={24} color={PRIMARY} style={styles.modalSearchIcon} />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search athletes or friends..."
+                placeholderTextColor={TEXT_MUTED}
+                autoFocus={true}
+              />
+            </View>
+
+            {/* Quick Search Tags */}
+            <View style={styles.quickSearchContainer}>
+              <Text style={styles.quickSearchTitle}>QUICK SEARCH</Text>
+              <View style={styles.quickSearchTags}>
+                {['@marcus_v', 'ELENA', 'Local Pros'].map((tag, index) => (
+                  <TouchableOpacity key={index} style={styles.quickSearchTag}>
+                    <Text style={styles.quickSearchTagText}>{tag}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Close Button */}
+            <TouchableOpacity 
+              style={styles.modalCloseButton}
+              onPress={() => setIsAddFriendModalVisible(false)}
+            >
+              <MaterialIcons name="close" size={24} color={TEXT_MUTED} />
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -398,5 +458,82 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(74, 94, 0, 0.2)',
     backgroundColor: 'rgba(74, 94, 0, 0.1)',
+  },
+  
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    paddingTop: Platform.OS === 'ios' ? 80 : 60,
+  },
+  modalBackground: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(13, 15, 6, 0.7)', // #0d0f06 with opacity
+  },
+  modalContent: {
+    width: '100%',
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  modalSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: SURFACE_CONTAINER_HIGH,
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(117, 119, 104, 0.2)', // outline-variant with opacity
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalSearchIcon: {
+    marginRight: 12,
+  },
+  modalSearchInput: {
+    flex: 1,
+    color: TEXT_WHITE,
+    fontSize: 16,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+  },
+  quickSearchContainer: {
+    width: '100%',
+    marginTop: 24,
+  },
+  quickSearchTitle: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+    color: TEXT_MUTED,
+    marginBottom: 16,
+  },
+  quickSearchTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  quickSearchTag: {
+    backgroundColor: SURFACE_CONTAINER_HIGHEST,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  quickSearchTagText: {
+    color: TEXT_WHITE,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  modalCloseButton: {
+    marginTop: 40,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
