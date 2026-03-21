@@ -54,10 +54,19 @@ export default function ChatScreen() {
       .onSnapshot(snapshot => {
         if (!snapshot) return;
         
-        const loadedMessages = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        const loadedMessages = snapshot.docs.map(doc => {
+          const data = doc.data();
+          
+          // Mark as read if the current user is not the sender and it's not read yet
+          if (data.senderId !== user?.uid && data.status !== 'read') {
+            doc.ref.update({ status: 'read' });
+          }
+
+          return {
+            id: doc.id,
+            ...data
+          };
+        });
         setMessages(loadedMessages);
       });
 
@@ -71,6 +80,7 @@ export default function ChatScreen() {
       text: inputText.trim(),
       senderId: user.uid,
       createdAt: firestore.FieldValue.serverTimestamp(),
+      status: 'sent', // 'sent', 'delivered', 'read'
     };
 
     setInputText('');
@@ -103,9 +113,20 @@ export default function ChatScreen() {
           <Image source={{ uri: String(friendPhoto) }} style={styles.messageAvatar} />
         )}
         <View style={[styles.messageBubble, isMe ? styles.messageBubbleMe : styles.messageBubbleFriend]}>
-          <Text style={[styles.messageText, isMe ? styles.messageTextMe : styles.messageTextFriend]}>
-            {item.text}
-          </Text>
+          <View style={styles.messageContentRow}>
+            <Text style={[styles.messageText, isMe ? styles.messageTextMe : styles.messageTextFriend]}>
+              {item.text}
+            </Text>
+            {isMe && (
+              <View style={styles.statusIconContainer}>
+                <MaterialIcons 
+                  name="done-all" 
+                  size={16} 
+                  color={item.status === 'read' ? '#3b82f6' : 'rgba(13, 15, 6, 0.4)'} 
+                />
+              </View>
+            )}
+          </View>
         </View>
       </View>
     );
@@ -247,6 +268,14 @@ const styles = StyleSheet.create({
   },
   messageTextFriend: {
     color: TEXT_WHITE,
+  },
+  messageContentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  statusIconContainer: {
+    marginLeft: 6,
+    marginBottom: 2,
   },
   inputContainer: {
     flexDirection: 'row',
