@@ -69,7 +69,7 @@ export default function CreateCustomFoodScreen() {
         category: 'Custom', // Auto-assign 'Custom' category
         mealType: mealType,
         servingSize: parseFloat(servingSize) || 100,
-        measureType: measureType.trim() || 'gram',
+        measureType: measureType, // Already strictly 'gram' or 'unit'
         calories: parseFloat(calories) || 0,
         protein: parseFloat(protein) || 0,
         carbs: parseFloat(carbs) || 0,
@@ -159,7 +159,22 @@ export default function CreateCustomFoodScreen() {
             </View>
             <View style={{ width: 16 }} />
             <View style={{ flex: 1 }}>
-              {renderInput("MEASURE TYPE", measureType, setMeasureType, "default")}
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>MEASURE TYPE</Text>
+                <View style={styles.chipsContainer}>
+                  {['gram', 'unit'].map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[styles.chip, measureType === type && styles.chipActive]}
+                      onPress={() => setMeasureType(type)}
+                    >
+                      <Text style={[styles.chipText, measureType === type && styles.chipTextActive]}>
+                        {type === 'gram' ? 'Gram' : 'Unit'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
             </View>
           </View>
         </View>

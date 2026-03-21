@@ -26,11 +26,15 @@ const MealDetailsScreen = () => {
     sugar,
     fiber,
     cholesterol,
-    isCustom
+    isCustom,
+    measureType: initialMeasureType
   } = useLocalSearchParams();
   
   // Use passed serving size or default to 100g if not provided
-  const servingSize = initialServingSize ? Number(initialServingSize) : 100;
+  const [servingSize, setServingSize] = useState(initialServingSize ? Number(initialServingSize) : 100);
+  const [measureType, setMeasureType] = useState(
+    initialMeasureType === 'unit' ? 'unit' : 'g'
+  );
 
   // Mock data - normally would come from API/params
   const mealName = name || "Unknown Food";
@@ -159,11 +163,32 @@ const MealDetailsScreen = () => {
         <View style={styles.servingSection}>
             <View style={styles.servingHeader}>
                 <View>
-                    <Text style={styles.sectionTitle}>Serving Size</Text>
+                    <Text style={styles.sectionTitle}>Portion Size</Text>
                 </View>
+                
+                <View style={styles.measureTypeToggle}>
+                    <TouchableOpacity 
+                        style={[styles.measureTypeBtn, measureType === 'g' || measureType === 'gram' ? styles.measureTypeBtnActive : null]}
+                        onPress={() => setMeasureType('g')}
+                    >
+                        <Text style={[styles.measureTypeText, measureType === 'g' || measureType === 'gram' ? styles.measureTypeTextActive : null]}>Gram</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={[styles.measureTypeBtn, measureType === 'unit' ? styles.measureTypeBtnActive : null]}
+                        onPress={() => setMeasureType('unit')}
+                    >
+                        <Text style={[styles.measureTypeText, measureType === 'unit' ? styles.measureTypeTextActive : null]}>Unit</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            <View style={styles.servingValueContainer}>
+                <Text style={styles.servingLabelText}>
+                    {measureType === 'unit' ? 'Unit' : 'Serving Size'}
+                </Text>
                 <View style={styles.servingValueBox}>
                     <Text style={styles.servingValueText}>{servingSize}</Text>
-                    <Text style={styles.servingUnitText}>g</Text>
+                    <Text style={styles.servingUnitText}>{measureType === 'unit' ? 'x' : 'g'}</Text>
                 </View>
             </View>
         </View>
@@ -357,26 +382,63 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: TEXT_MUTED,
   },
+  measureTypeToggle: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 8,
+    padding: 2,
+  },
+  measureTypeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  measureTypeBtnActive: {
+    backgroundColor: PRIMARY,
+  },
+  measureTypeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: TEXT_MUTED,
+  },
+  measureTypeTextActive: {
+    color: '#1f230f',
+  },
+  servingValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  servingLabelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: TEXT_WHITE,
+  },
   servingValueBox: {
     flexDirection: 'row',
     alignItems: 'baseline',
     backgroundColor: 'rgba(204, 255, 0, 0.1)',
     borderWidth: 1,
     borderColor: 'rgba(204, 255, 0, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 8,
   },
   servingValueText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: PRIMARY,
   },
   servingUnitText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '500',
     color: PRIMARY,
-    marginLeft: 2,
+    marginLeft: 4,
   },
   sliderLabels: {
     flexDirection: 'row',

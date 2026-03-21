@@ -39,11 +39,13 @@ const MealItem = ({ icon, imageUrl, name, detail, onAdd, onDelete, data }: MealI
         icon: item.icon, 
         imageUrl: item.imageUrl,
         // Pass nutritional data
+        id: data.id,
         calories: data.calories,
         protein: data.protein,
         carbs: data.carbs,
         fat: data.fat,
         servingSize: data.servingSize,
+        measureType: data.measureType,
         potassium: data.potassium,
         sodium: data.sodium,
         sugar: data.sugar,
