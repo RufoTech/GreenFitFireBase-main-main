@@ -1,6 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
@@ -68,6 +69,13 @@ export default function ProfileScreen() {
     }
   };
 
+  const copyToClipboard = async () => {
+    if (user?.uid) {
+      await Clipboard.setStringAsync(user.uid);
+      Alert.alert("Copied!", "User ID copied to clipboard.");
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1f230f" />
@@ -95,7 +103,12 @@ export default function ProfileScreen() {
           
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{user?.displayName || 'Alex Johnson'}</Text>
-            <Text style={styles.userJoined}>Member since January 2023</Text>
+            <TouchableOpacity onPress={copyToClipboard} style={styles.userIdContainer}>
+              <Text style={styles.userIdText} numberOfLines={1} ellipsizeMode="middle">
+                ID: {user?.uid || 'N/A'}
+              </Text>
+              <MaterialIcons name="content-copy" size={14} color="rgba(255, 255, 255, 0.5)" />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -211,9 +224,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 4,
   },
-  userJoined: {
-    color: '#94a3b8',
+  userIdContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 8,
+  },
+  userIdText: {
+    color: 'rgba(255, 255, 255, 0.5)',
     fontSize: 14,
+    maxWidth: 150, // Ensures it truncates if too long
   },
   menuContainer: {
     paddingHorizontal: 16,
