@@ -1,20 +1,20 @@
-import React from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  SafeAreaView,
-  StatusBar,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
-  Image,
-  Alert
-} from 'react-native';
-import { MaterialIcons, Feather } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useRouter } from 'expo-router';
+import React from 'react';
+import {
+  Alert,
+  Image,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
 // MenuItem Component
 const MenuItem = ({ icon, title, onPress, isLogout = false }: { icon: any, title: string, onPress?: () => void, isLogout?: boolean }) => (
@@ -116,7 +116,7 @@ export default function ProfileScreen() {
           <MenuItem 
             icon="group" 
             title="Friends" 
-            onPress={() => {}} // You can add the navigation route here later
+            onPress={() => router.push('/screens/FriendsScreen')}
           />
           <MenuItem 
             icon="help" 
