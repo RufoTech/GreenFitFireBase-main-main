@@ -1,7 +1,11 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     Image,
     KeyboardAvoidingView,
     Modal,
@@ -28,32 +32,258 @@ const OUTLINE = "#757768";
 
 export default function FriendsScreen() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('Following');
+  const user = auth().currentUser;
+
+  const [activeTab, setActiveTab] = useState<'Following' | 'Followers' | 'Requests'>('Following');
   const [isAddFriendModalVisible, setIsAddFriendModalVisible] = useState(false);
 
-  const friends = [
-    {
-      id: '1',
-      name: 'Marcus Thorne',
-      activity: 'Lifting • 45m ago',
-      avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA-bjqdDC1tI1uCGvXfl3FQRgQcjrGZ7QtjXj-ZB3VKVde79b46teYQhg449NTTPb7BI7y5dHF1U9EeT0fYl5Q0rwyK2Q99uTdg-x2QtWFpd3ZfrNB2n0wKRgTFG-QAW8lnUEk5fnAsrhSmuU4Ku5wxqH2YaovKOT7plJYiVHIt7Myzc2DUf5FSwwQsaz6L_nSVOB1qrfwsC3DxrHKGSc708xSsSvYsM51Ffg0H2c-rOoIi9UjTD_KcAQeevgFBWGUC5sWK_FObdXI',
-      online: true,
-    },
-    {
-      id: '2',
-      name: 'Sarah Jenkins',
-      activity: 'HIIT • Active Now',
-      avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBPd8t3Yqy29RaEs2gPAc2dX4oibCMyXP0MSAIQaG-4V2DB_T8fZckGfvB-TcWL_CQ9ElJpKdYSb4wEu37ZEK6M1tzWT4LpFVLlUXcfu4Xj_iwoyVvGCye0KlIhSEKMMGJtDlLUszFV73BIubNuPaUltKwNU7ThAlQF3b5BekFARcSCVQ7baHIBoRdfT9teHgukKkddnvFf7TXHxyIjvDK2Vewk1uvlVvtzHKgV4WLa7Zgwqyax7TaUGqJ85N2q4BqsuSwL1ntxbUc',
-      online: true,
-    },
-    {
-      id: '3',
-      name: 'David Chen',
-      activity: 'Last seen 4h ago',
-      avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuB92iIVAZTegRCUmy7WrvmMY02DJLQIWNGBa0jOJfVTgzfSU34gtcTQ4Wmztw86aq0b59VvyUvS8080Yx84WzH048g5tcWf33nDtUfGpaYzOdrLxhxuwjNGgTDV6_ou6pZlu44sJGB_cOzRSXdhjI0nIKugDSJgP5q0SQAE0ECrvMJQsPpGRpY2vORKPR7CoCwttAL76tPbUUCIW74kE0fBP1UginfMl4nKsfyjf4H0Rnkq9BYf2G8iRtG11HqP3DJQIJT8ouY3A80',
-      online: false,
-    },
-  ];
+  // Data states
+  const [following, setFollowing] = useState<any[]>([]);
+  const [followers, setFollowers] = useState<any[]>([]);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Search states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+
+    // Listen to friend requests where current user is the receiver and status is 'pending'
+    const unsubscribeRequests = firestore()
+      .collection('friend_requests')
+      .where('receiverId', '==', user.uid)
+      .where('status', '==', 'pending')
+      .onSnapshot(async (snapshot) => {
+        if (!snapshot) return;
+        
+        const reqs = [];
+        for (const doc of snapshot.docs) {
+          const data = doc.data();
+          // Fetch sender details from user_about
+          const senderDoc = await firestore().collection('user_about').doc(data.senderId).get();
+          if (senderDoc.exists) {
+            reqs.push({
+              id: doc.id,
+              ...data,
+              user: senderDoc.data()
+            });
+          }
+        }
+        setRequests(reqs);
+      });
+
+    // Listen to accepted friends (where current user is sender OR receiver)
+    // To simplify, we can do two queries or just fetch all and filter locally
+    const unsubscribeFollowing = firestore()
+      .collection('friend_requests')
+      .where('senderId', '==', user.uid)
+      .where('status', '==', 'accepted')
+      .onSnapshot(async (snapshot) => {
+        if (!snapshot) return;
+        const fings = [];
+        for (const doc of snapshot.docs) {
+          const data = doc.data();
+          const receiverDoc = await firestore().collection('user_about').doc(data.receiverId).get();
+          if (receiverDoc.exists) {
+            fings.push({
+              id: doc.id,
+              ...data,
+              user: receiverDoc.data()
+            });
+          }
+        }
+        setFollowing(fings);
+      });
+
+    const unsubscribeFollowers = firestore()
+      .collection('friend_requests')
+      .where('receiverId', '==', user.uid)
+      .where('status', '==', 'accepted')
+      .onSnapshot(async (snapshot) => {
+        if (!snapshot) return;
+        const fwers = [];
+        for (const doc of snapshot.docs) {
+          const data = doc.data();
+          const senderDoc = await firestore().collection('user_about').doc(data.senderId).get();
+          if (senderDoc.exists) {
+            fwers.push({
+              id: doc.id,
+              ...data,
+              user: senderDoc.data()
+            });
+          }
+        }
+        setFollowers(fwers);
+        setLoading(false);
+      });
+
+    return () => {
+      unsubscribeRequests();
+      unsubscribeFollowing();
+      unsubscribeFollowers();
+    };
+  }, [user]);
+
+  // Search Users by UID or Email
+  const handleSearch = async (text: string) => {
+    setSearchQuery(text);
+    if (text.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      // Basic search by exact UID or Email for simplicity in Firestore without external index
+      const usersRef = firestore().collection('user_about');
+      
+      // Try finding by exact ID first
+      const byId = await usersRef.doc(text.trim()).get();
+      
+      // Try finding by email
+      const byEmail = await usersRef.where('mail', '==', text.trim().toLowerCase()).get();
+
+      let results: any[] = [];
+
+      if (byId.exists && byId.id !== user?.uid) {
+        results.push({ id: byId.id, ...byId.data() });
+      }
+
+      byEmail.docs.forEach(doc => {
+        if (doc.id !== user?.uid && !results.find(r => r.id === doc.id)) {
+          results.push({ id: doc.id, ...doc.data() });
+        }
+      });
+
+      setSearchResults(results);
+    } catch (error) {
+      console.error("Search error:", error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const sendFriendRequest = async (receiverId: string) => {
+    if (!user) return;
+    
+    try {
+      // Check if request already exists
+      const existingReq = await firestore()
+        .collection('friend_requests')
+        .where('senderId', '==', user.uid)
+        .where('receiverId', '==', receiverId)
+        .get();
+
+      if (!existingReq.empty) {
+        Alert.alert("Info", "Friend request already sent.");
+        return;
+      }
+
+      await firestore().collection('friend_requests').add({
+        senderId: user.uid,
+        receiverId: receiverId,
+        status: 'pending',
+        createdAt: firestore.FieldValue.serverTimestamp()
+      });
+
+      Alert.alert("Success", "Friend request sent!");
+      setIsAddFriendModalVisible(false);
+      setSearchQuery('');
+      setSearchResults([]);
+    } catch (error) {
+      console.error("Error sending request:", error);
+      Alert.alert("Error", "Could not send friend request.");
+    }
+  };
+
+  const acceptRequest = async (requestId: string) => {
+    try {
+      await firestore().collection('friend_requests').doc(requestId).update({
+        status: 'accepted',
+        updatedAt: firestore.FieldValue.serverTimestamp()
+      });
+      Alert.alert("Success", "Friend request accepted!");
+    } catch (error) {
+      console.error("Error accepting:", error);
+    }
+  };
+
+  const declineRequest = async (requestId: string) => {
+    try {
+      await firestore().collection('friend_requests').doc(requestId).delete();
+      Alert.alert("Declined", "Friend request declined.");
+    } catch (error) {
+      console.error("Error declining:", error);
+    }
+  };
+
+  const openChat = (friendId: string, friendName: string, friendPhoto: string) => {
+    router.push({
+      pathname: '/screens/ChatScreen',
+      params: { 
+        friendId, 
+        friendName, 
+        friendPhoto 
+      }
+    });
+  };
+
+  const renderFriendItem = (item: any, type: 'following' | 'followers' | 'requests') => {
+    const displayUser = item.user;
+    if (!displayUser) return null;
+
+    // Fallback to name/photo logic
+    const displayName = displayUser.fullname || displayUser.displayName || displayUser.name || displayUser.mail || displayUser.email || 'User';
+    const displayPhoto = displayUser.photoURL || displayUser.avatar || 'https://via.placeholder.com/150';
+
+    return (
+      <View key={item.id} style={styles.friendItem}>
+        <View style={styles.friendInfo}>
+          <View style={styles.avatarContainer}>
+            <Image 
+              source={{ uri: displayPhoto }} 
+              style={styles.avatar} 
+            />
+            {/* Online indicator could be dynamic later */}
+            <View style={[styles.onlineIndicator, { backgroundColor: '#abac9c' }]} />
+          </View>
+          <View style={styles.friendDetails}>
+            <Text style={styles.friendName}>{displayName}</Text>
+            <Text style={styles.friendActivity}>
+              {type === 'requests' ? 'Wants to be friends' : 'Active recently'}
+            </Text>
+          </View>
+        </View>
+        
+        <View style={styles.actionButtons}>
+          {type === 'requests' ? (
+            <>
+              <TouchableOpacity style={styles.actionBtnPrimary} onPress={() => acceptRequest(item.id)}>
+                <MaterialIcons name="check" size={20} color="#4a5e00" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtnSecondary} onPress={() => declineRequest(item.id)}>
+                <MaterialIcons name="close" size={20} color={TEXT_MUTED} />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity 
+              style={styles.actionBtnSecondary}
+              onPress={() => openChat(
+                type === 'following' ? item.receiverId : item.senderId,
+                displayName,
+                displayPhoto
+              )}
+            >
+              <MaterialIcons name="chat-bubble" size={20} color={TEXT_MUTED} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -96,6 +326,14 @@ export default function FriendsScreen() {
             >
               <Text style={[styles.tabText, activeTab === 'Followers' && styles.activeTabText]}>FOLLOWERS</Text>
             </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tabButton, activeTab === 'Requests' && styles.activeTabButton]}
+              onPress={() => setActiveTab('Requests')}
+            >
+              <Text style={[styles.tabText, activeTab === 'Requests' && styles.activeTabText]}>
+                REQUESTS {requests.length > 0 && `(${requests.length})`}
+              </Text>
+            </TouchableOpacity>
           </View>
           
           <TouchableOpacity 
@@ -111,37 +349,35 @@ export default function FriendsScreen() {
         {/* Friends List Section */}
         <View style={styles.friendsSection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Active Friends</Text>
-            <Text style={styles.onlineCount}>12 ONLINE</Text>
+            <Text style={styles.sectionTitle}>
+              {activeTab === 'Requests' ? 'Pending Requests' : 'Active Friends'}
+            </Text>
+            {activeTab !== 'Requests' && (
+              <Text style={styles.onlineCount}>
+                {(activeTab === 'Following' ? following : followers).length} TOTAL
+              </Text>
+            )}
           </View>
 
-          <View style={styles.friendsList}>
-            {friends.map((friend) => (
-              <TouchableOpacity key={friend.id} style={styles.friendItem} activeOpacity={0.7}>
-                <View style={styles.friendInfo}>
-                  <View style={[styles.avatarContainer, !friend.online && { opacity: 0.6 }]}>
-                    <Image source={{ uri: friend.avatar }} style={styles.avatar} />
-                    {friend.online && <View style={styles.onlineIndicator} />}
-                  </View>
-                  <View style={styles.friendDetails}>
-                    <Text style={styles.friendName}>{friend.name}</Text>
-                    <Text style={styles.friendActivity}>{friend.activity}</Text>
-                  </View>
-                </View>
-                
-                <View style={styles.actionButtons}>
-                  {friend.online && (
-                    <TouchableOpacity style={styles.actionBtnPrimary}>
-                      <MaterialIcons name="bolt" size={20} color="#4a5e00" />
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity style={styles.actionBtnSecondary}>
-                    <MaterialIcons name="chat-bubble" size={20} color={TEXT_MUTED} />
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {loading ? (
+            <ActivityIndicator size="large" color={PRIMARY} style={{ marginTop: 20 }} />
+          ) : (
+            <View style={styles.friendsList}>
+              {activeTab === 'Following' && following.length === 0 && (
+                <Text style={{ color: TEXT_MUTED }}>You are not following anyone yet.</Text>
+              )}
+              {activeTab === 'Followers' && followers.length === 0 && (
+                <Text style={{ color: TEXT_MUTED }}>No followers yet.</Text>
+              )}
+              {activeTab === 'Requests' && requests.length === 0 && (
+                <Text style={{ color: TEXT_MUTED }}>No pending requests.</Text>
+              )}
+
+              {activeTab === 'Following' && following.map(item => renderFriendItem(item, 'following'))}
+              {activeTab === 'Followers' && followers.map(item => renderFriendItem(item, 'followers'))}
+              {activeTab === 'Requests' && requests.map(item => renderFriendItem(item, 'requests'))}
+            </View>
+          )}
         </View>
 
         {/* Invite Friends Section */}
@@ -188,11 +424,45 @@ export default function FriendsScreen() {
               <MaterialIcons name="search" size={24} color={PRIMARY} style={styles.modalSearchIcon} />
               <TextInput
                 style={styles.modalSearchInput}
-                placeholder="Search athletes or friends..."
+                placeholder="Search by User ID or Email..."
                 placeholderTextColor={TEXT_MUTED}
                 autoFocus={true}
+                value={searchQuery}
+                onChangeText={handleSearch}
+                autoCapitalize="none"
               />
+              {isSearching && <ActivityIndicator size="small" color={PRIMARY} />}
             </View>
+
+            {/* Search Results */}
+            {searchResults.length > 0 && (
+              <View style={styles.searchResultsContainer}>
+                {searchResults.map((result) => {
+                  const displayName = result.fullname || result.displayName || result.name || result.mail || result.email || 'User';
+                  const displayPhoto = result.photoURL || result.avatar || 'https://via.placeholder.com/150';
+
+                  return (
+                    <View key={result.id} style={styles.searchResultItem}>
+                      <View style={styles.friendInfo}>
+                        <Image 
+                          source={{ uri: displayPhoto }} 
+                          style={styles.avatar} 
+                        />
+                        <View style={styles.friendDetails}>
+                          <Text style={styles.friendName}>{displayName}</Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity 
+                        style={styles.actionBtnPrimary}
+                        onPress={() => sendFriendRequest(result.id)}
+                      >
+                        <MaterialIcons name="person-add" size={20} color="#4a5e00" />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
 
             {/* Quick Search Tags */}
             <View style={styles.quickSearchContainer}>
@@ -499,6 +769,21 @@ const styles = StyleSheet.create({
     color: TEXT_WHITE,
     fontSize: 16,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+  },
+  searchResultsContainer: {
+    width: '100%',
+    marginTop: 16,
+    backgroundColor: SURFACE_CONTAINER_HIGH,
+    borderRadius: 16,
+    padding: 16,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   quickSearchContainer: {
     width: '100%',

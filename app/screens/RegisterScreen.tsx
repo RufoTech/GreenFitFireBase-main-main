@@ -1,25 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
-  ScrollView,
-  Platform,
-  Image,
-  Dimensions,
-  KeyboardAvoidingView,
-  Alert
-} from 'react-native';
+import GoogleIcon from '@/components/GoogleIcon';
 import { colors } from '@/constants/theme';
-import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import GoogleIcon from '@/components/GoogleIcon';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  Alert,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -64,8 +63,30 @@ export default function RegisterScreen() {
       const googleCredential = auth.GoogleAuthProvider.credential(idToken);
 
       // Sign-in the user with the credential
-      await auth().signInWithCredential(googleCredential);
+      const userCredential = await auth().signInWithCredential(googleCredential);
       
+      // Save user details to Firestore 'user_about'
+      const user = userCredential.user;
+      if (user) {
+        // Force creating or updating user_about
+        await firestore().collection('user_about').doc(user.uid).set({
+          fullname: user.displayName || 'Google User',
+          mail: user.email || '',
+          photoURL: user.photoURL || '',
+          provider: 'google',
+          lastLoginAt: firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // Also save to 'users' collection to keep consistency across the app
+        await firestore().collection('users').doc(user.uid).set({
+          displayName: user.displayName || 'Google User',
+          email: user.email || '',
+          photoURL: user.photoURL || '',
+          provider: 'google',
+          lastLoginAt: firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+
       // Navigate to GoalSelection screen upon successful login
       router.replace('/screens/GoalSelectionScreen');
     } catch (error) {
@@ -102,11 +123,22 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       const userCredential = await auth().createUserWithEmailAndPassword(email, password);
+      const user = userCredential.user;
+
       // Optional: Update user profile with full name
-      await userCredential.user.updateProfile({ displayName: fullName });
+      await user.updateProfile({ displayName: fullName });
+
+      // Save user details to Firestore 'user_about'
+      await firestore().collection('user_about').doc(user.uid).set({
+        fullname: fullName,
+        mail: email,
+        photoURL: '', // Boş qalacaq çünki e-mail ilə qeydiyyatdan keçir, sonradan əlavə edə bilər
+        provider: 'email',
+        createdAt: firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
       
       // Send email verification
-      await userCredential.user.sendEmailVerification();
+      await user.sendEmailVerification();
       
       Alert.alert(
         'Kayıt Başarılı', 

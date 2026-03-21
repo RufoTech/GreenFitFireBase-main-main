@@ -1,12 +1,14 @@
+import GoogleIcon from '@/components/GoogleIcon';
 import { colors } from '@/constants/theme';
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  Image,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -15,10 +17,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  Modal
+  View
 } from 'react-native';
-import GoogleIcon from '@/components/GoogleIcon';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -50,7 +50,28 @@ export default function LoginScreen() {
       const googleCredential = auth.GoogleAuthProvider.credential(idToken);
 
       // Sign-in the user with the credential
-      await auth().signInWithCredential(googleCredential);
+      const userCredential = await auth().signInWithCredential(googleCredential);
+      const user = userCredential.user;
+
+      if (user) {
+        // Force creating or updating user_about
+        await firestore().collection('user_about').doc(user.uid).set({
+          fullname: user.displayName || 'Google User',
+          mail: user.email || '',
+          photoURL: user.photoURL || '',
+          provider: 'google',
+          lastLoginAt: firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // Force creating or updating users
+        await firestore().collection('users').doc(user.uid).set({
+          displayName: user.displayName || 'Google User',
+          email: user.email || '',
+          photoURL: user.photoURL || '',
+          provider: 'google',
+          lastLoginAt: firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
       
       // Navigate to GoalSelection screen upon successful login
       router.replace('/screens/GoalSelectionScreen');
