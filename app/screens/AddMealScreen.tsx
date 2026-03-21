@@ -49,7 +49,8 @@ const MealItem = ({ icon, imageUrl, name, detail, onAdd, onDelete, data }: MealI
         sugar: data.sugar,
         fiber: data.fiber,
         cholesterol: data.cholesterol,
-        detailsImage: data.detailsImage
+        detailsImage: data.detailsImage,
+        isCustom: data.isCustom ? 'true' : 'false' // Pass isCustom flag
       }
     });
   };

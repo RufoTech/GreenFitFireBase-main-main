@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, Platform, StatusBar, ImageBackground } from 'react-native';
-import { MaterialIcons, FontAwesome6 } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import Svg, { Circle } from 'react-native-svg';
-import Slider from '@react-native-community/slider';
+import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React from 'react';
+import { ImageBackground, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 
 const PRIMARY = "#ccff00";
 const BG_DARK = "#1f230f";
@@ -26,7 +25,8 @@ const MealDetailsScreen = () => {
     sodium,
     sugar,
     fiber,
-    cholesterol
+    cholesterol,
+    isCustom
   } = useLocalSearchParams();
   
   // Use passed serving size or default to 100g if not provided
@@ -77,17 +77,9 @@ const MealDetailsScreen = () => {
 
       <ScrollView contentContainerStyle={styles.content}>
         
-        {/* Hero Image */}
-        <View style={styles.heroImageContainer}>
-             <ImageBackground
-                source={{ uri: finalImage }}
-                style={styles.heroImage}
-                resizeMode="cover"
-             >
-                <LinearGradient
-                    colors={['transparent', 'rgba(31,35,15,0.9)']}
-                    style={styles.imageOverlay}
-                />
+        {/* Hero Section */}
+        {isCustom === 'true' ? (
+            <View style={styles.customHeroContainer}>
                 <View style={styles.titleContainer}>
                     <Text style={styles.mealTitle}>{mealName}</Text>
                     <View style={styles.calorieTag}>
@@ -95,8 +87,28 @@ const MealDetailsScreen = () => {
                         <Text style={styles.calorieText}>{caloriesVal} KCAL</Text>
                     </View>
                 </View>
-             </ImageBackground>
-        </View>
+            </View>
+        ) : (
+            <View style={styles.heroImageContainer}>
+                 <ImageBackground
+                    source={{ uri: finalImage }}
+                    style={styles.heroImage}
+                    resizeMode="cover"
+                 >
+                    <LinearGradient
+                        colors={['transparent', 'rgba(31,35,15,0.9)']}
+                        style={styles.imageOverlay}
+                    />
+                    <View style={styles.titleContainer}>
+                        <Text style={styles.mealTitle}>{mealName}</Text>
+                        <View style={styles.calorieTag}>
+                            <MaterialIcons name="local-fire-department" size={20} color={PRIMARY} />
+                            <Text style={styles.calorieText}>{caloriesVal} KCAL</Text>
+                        </View>
+                    </View>
+                 </ImageBackground>
+            </View>
+        )}
 
         {/* Nutrition Overview */}
         <View style={styles.nutritionSection}>
@@ -248,6 +260,14 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: '100%',
+  },
+  customHeroContainer: {
+    paddingVertical: 24,
+    marginBottom: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 24,
   },
   imageOverlay: {
     ...StyleSheet.absoluteFillObject,
