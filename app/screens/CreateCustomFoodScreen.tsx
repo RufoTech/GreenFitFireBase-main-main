@@ -1,21 +1,21 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  StatusBar,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Platform,
-  Alert,
-  ActivityIndicator
-} from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
 const PRIMARY = "#ccff00";
 const BG_DARK = "#0d0f06";
@@ -29,7 +29,6 @@ export default function CreateCustomFoodScreen() {
   
   // Basic Info
   const [name, setName] = useState('');
-  const [category, setCategory] = useState(''); // E.g., Snacks, Fruits, Meat
   const [mealType, setMealType] = useState('Snacks'); // Can be Breakfast, Lunch, Dinner, Snacks
   
   // Serving Info
@@ -67,7 +66,7 @@ export default function CreateCustomFoodScreen() {
       const payload = {
         userId: user.uid,
         name: name.trim(),
-        category: category.trim() || 'Custom',
+        category: 'Custom', // Auto-assign 'Custom' category
         mealType: mealType,
         servingSize: parseFloat(servingSize) || 100,
         measureType: measureType.trim() || 'gram',
@@ -134,9 +133,22 @@ export default function CreateCustomFoodScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Basic Info</Text>
           {renderInput("FOOD NAME", name, setName, "default", "e.g., Homemade Avocado Toast")}
-          {renderInput("CATEGORY", category, setCategory, "default", "e.g., Snacks")}
-          {/* MealType usually defaults or user selects, input is fine for simplicity */}
-          {renderInput("MEAL TYPE", mealType, setMealType, "default", "Breakfast, Lunch, Dinner, or Snacks")}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>MEAL TYPE</Text>
+            <View style={styles.chipsContainer}>
+              {['Breakfast', 'Lunch', 'Dinner', 'Snacks'].map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.chip, mealType === type && styles.chipActive]}
+                  onPress={() => setMealType(type)}
+                >
+                  <Text style={[styles.chipText, mealType === type && styles.chipTextActive]}>
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -267,6 +279,32 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     color: '#f8fafc',
     fontSize: 16,
+  },
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 4,
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  chipActive: {
+    backgroundColor: PRIMARY,
+    borderColor: PRIMARY,
+  },
+  chipText: {
+    color: '#f8fafc',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  chipTextActive: {
+    color: '#1f230f',
   },
   footer: {
     padding: 20,

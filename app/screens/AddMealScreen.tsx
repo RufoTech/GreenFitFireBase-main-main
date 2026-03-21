@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Platform, StatusBar, TextInput, ScrollView, Image, ActivityIndicator, Modal, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import firestore from '@react-native-firebase/firestore';
-import auth from '@react-native-firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Modal, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const PRIMARY = "#ccff00";
 const BG_DARK = "#0d0f06";
@@ -21,10 +21,11 @@ interface MealItemProps {
     name: string;
     detail: string;
     onAdd?: (item: any) => void;
+    onDelete?: (id: string) => void; // New prop for deleting
     data: any; // Full food data
 }
 
-const MealItem = ({ icon, imageUrl, name, detail, onAdd, data }: MealItemProps) => {
+const MealItem = ({ icon, imageUrl, name, detail, onAdd, onDelete, data }: MealItemProps) => {
   const [added, setAdded] = useState(false);
 
   const router = useRouter();
@@ -75,10 +76,18 @@ const MealItem = ({ icon, imageUrl, name, detail, onAdd, data }: MealItemProps) 
              <MaterialIcons name={icon as any || "restaurant"} size={24} color={PRIMARY} />
           )}
         </View>
-        <View>
+        <View style={styles.oldMealNameContainer}>
           <Text style={styles.oldMealName}>{name}</Text>
-          <Text style={styles.oldMealDetail}>{detail}</Text>
+          {data.isCustom && onDelete && (
+            <TouchableOpacity 
+              style={styles.deleteButton} 
+              onPress={() => onDelete(data.id)}
+            >
+              <MaterialIcons name="delete-outline" size={20} color="#ff4444" />
+            </TouchableOpacity>
+          )}
         </View>
+        <Text style={styles.oldMealDetail}>{detail}</Text>
       </View>
       <TouchableOpacity
         onPress={handleAdd}
@@ -95,7 +104,7 @@ const MealItem = ({ icon, imageUrl, name, detail, onAdd, data }: MealItemProps) 
 };
 
 export default function AddMealScreen() {
-  const [activeCategory, setActiveCategory] = useState("");
+  const [activeCategory, setActiveCategory] = useState("All");
   const [categories, setCategories] = useState<string[]>([]);
   const [foods, setFoods] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -161,23 +170,33 @@ export default function AddMealScreen() {
         const user = auth().currentUser;
         if (user) {
           const customSnapshot = await firestore().collection('customUserFoods').where('userId', '==', user.uid).get();
-          const customFoods = customSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            isCustom: true
-          }));
+          const customFoods = customSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              isCustom: true,
+              // Map measureType to detail or fallback to servingSize
+              detail: `${data.servingSize || 100} ${data.measureType || 'g'} • ${data.calories || 0} kcal`,
+              // Ensure mealType matches activeMealType case if needed
+            };
+          });
           foodList = [...foodList, ...customFoods];
         }
         
-        // Extract unique categories
-        const uniqueCategories = Array.from(new Set(foodList.map((item: any) => item.category).filter(Boolean))) as string[];
+        // Extract unique categories (trim and handle casing to ensure no duplicates)
+        const uniqueCategories = Array.from(
+          new Set(
+            foodList
+              .map((item: any) => item.category?.trim())
+              .filter(Boolean)
+          )
+        ) as string[];
         
-        setCategories(uniqueCategories);
+        // Add "All" at the beginning
+        setCategories(["All", ...uniqueCategories]);
         setFoods(foodList);
         
-        if (uniqueCategories.length > 0) {
-            setActiveCategory(uniqueCategories[0]);
-        }
       } catch (error) {
         console.error("Error fetching foods:", error);
       } finally {
@@ -191,9 +210,13 @@ export default function AddMealScreen() {
   const getFilteredFoods = () => {
     let filtered = foods;
     
+    // For "Custom" category, maybe also filter by mealType if you want them strictly bound to the meal you're adding to.
+    // E.g., if activeCategory === 'Custom' && activeMealType matches food.mealType. 
+    // Currently, it just shows all 'Custom' foods in the Custom tab.
+
     // Filter by category
-    if (activeCategory) {
-        filtered = filtered.filter(f => f.category === activeCategory);
+    if (activeCategory && activeCategory !== "All") {
+        filtered = filtered.filter(f => f.category?.trim() === activeCategory);
     }
     
     // Filter by search
@@ -215,6 +238,30 @@ export default function AddMealScreen() {
       };
       return updated;
     });
+  };
+
+  const handleDeleteCustomFood = (id: string) => {
+    Alert.alert(
+      "Delete Custom Food",
+      "Are you sure you want to delete this custom food?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await firestore().collection('customUserFoods').doc(id).delete();
+              // Remove from local state to update UI immediately
+              setFoods(prev => prev.filter(f => f.id !== id));
+            } catch (error) {
+              console.error("Error deleting custom food:", error);
+              Alert.alert("Error", "Could not delete food.");
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleSaveGoal = async (text: string) => {
@@ -691,9 +738,10 @@ export default function AddMealScreen() {
                             <MealItem 
                                 key={food.id} 
                                 name={food.name || 'Unknown Food'}
-                                detail={`${food.measureType || ''} • ${food.calories || 0} kcal`}
+                                detail={food.detail || `${food.measureType || 'g'} • ${food.calories || 0} kcal`}
                                 imageUrl={food.image}
                                 onAdd={handleAdd} 
+                                onDelete={handleDeleteCustomFood}
                                 data={food}
                             />
                         ))}
@@ -1176,10 +1224,20 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
+  oldMealNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   oldMealName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#f1f5f9',
+  },
+  deleteButton: {
+    padding: 4,
+    backgroundColor: 'rgba(255,68,68,0.1)',
+    borderRadius: 8,
   },
   oldMealDetail: {
     fontSize: 14,
