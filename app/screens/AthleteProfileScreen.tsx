@@ -39,7 +39,7 @@ export default function AthleteProfileScreen() {
           <MaterialIcons name="arrow-back" size={24} color={PRIMARY} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>ATHLETE PROFILE</Text>
-        <View style={{ width: 40 }} /> {/* Spacer for centering */}
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -61,8 +61,7 @@ export default function AthleteProfileScreen() {
           <Text style={styles.profileName}>Marcus Thorne</Text>
           
           <Text style={styles.profileBio}>
-            Strength & Conditioning | Powerlifter | Training for the Titan Nationals 2024.{' '}
-            <Text style={styles.bioHighlight}>Never settle.</Text>
+            Strength & Conditioning | Powerlifter | Training for the Titan Nationals 2024. <Text style={styles.bioHighlight}>Never settle.</Text>
           </Text>
 
           <View style={styles.actionButtons}>

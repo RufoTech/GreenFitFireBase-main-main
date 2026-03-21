@@ -117,14 +117,14 @@ export default function ProfileScreen() {
           <Text style={styles.menuHeader}>ACCOUNT SETTINGS</Text>
           
           <MenuItem 
-            icon="person" 
-            title="Personal Information" 
-            onPress={() => router.push('/screens/PersonalDataScreen')} 
-          />
-          <MenuItem 
             icon="badge" 
             title="Account Details" 
             onPress={() => router.push('/screens/AthleteProfileScreen')}
+          />
+          <MenuItem 
+            icon="person" 
+            title="Personal Information" 
+            onPress={() => router.push('/screens/PersonalDataScreen')} 
           />
           <MenuItem 
             icon="emoji-events" 

@@ -202,7 +202,7 @@ export default function LoginScreen() {
         {/* Hero Section */}
         <View style={styles.heroSection}>
           <Text style={styles.heroTitle}>Welcome</Text>
-          <Text style={styles.heroSubtitle}> Continue your workout journey</Text>
+          <Text style={styles.heroSubtitle}>Continue your workout journey</Text>
         </View>
 
         {/* Login Form */}
@@ -210,7 +210,7 @@ export default function LoginScreen() {
           
           {/* Email Field */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}> Email or Phone</Text>
+            <Text style={styles.label}>Email or Phone</Text>
             <TextInput 
               style={styles.input}
               placeholder="example@fitflow.com"
