@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import * as Notifications from 'expo-notifications';
 import { AppEvents } from './eventEmitter';
 
-const ACHIEVEMENTS_STORAGE_KEY = 'user_achievements';
-const USER_XP_KEY = 'user_xp';
 const WORKOUT_DAYS_KEY = 'workout_days_history';
 
 export type AchievementId = 
@@ -33,32 +33,66 @@ export const ACHIEVEMENTS: Record<AchievementId, Achievement> = {
   hydration_hero: { id: 'hydration_hero', title: 'Hydration Hero', description: 'Met daily water limit', xpReward: 100, icon: 'water-drop' },
 };
 
-// --- Helpers to Get/Set Local Data ---
+// --- Helpers to Get/Set Remote Data ---
 
 export const getUnlockedAchievements = async (): Promise<Record<string, { id: string, unlockedAt: number }>> => {
   try {
-    const data = await AsyncStorage.getItem(ACHIEVEMENTS_STORAGE_KEY);
-    return data ? JSON.parse(data) : {};
+    const user = auth().currentUser;
+    if (!user) return {};
+
+    const snapshot = await firestore()
+      .collection('user_achievements')
+      .where('userId', '==', user.uid)
+      .where('completed', '==', true)
+      .get();
+
+    const unlocked: Record<string, { id: string, unlockedAt: number }> = {};
+    snapshot.docs.forEach((doc) => {
+      const data = doc.data();
+      if (data.id) {
+        unlocked[data.id] = {
+          id: data.id,
+          unlockedAt: data.unlockedAt || Date.now(),
+        };
+      }
+    });
+
+    return unlocked;
   } catch (error) {
-    console.error('Error reading achievements', error);
+    console.error('Error reading achievements from Firebase', error);
     return {};
   }
 };
 
 export const getUserXp = async (): Promise<number> => {
   try {
-    const xpStr = await AsyncStorage.getItem(USER_XP_KEY);
-    return xpStr ? parseInt(xpStr, 10) : 0;
+    const user = auth().currentUser;
+    if (!user) return 0;
+
+    const userDoc = await firestore().collection('user_about').doc(user.uid).get();
+    const exists = typeof userDoc.exists === 'function' ? userDoc.exists() : userDoc.exists;
+    if (exists) {
+      const data = userDoc.data();
+      return typeof data?.xp === 'number' ? data.xp : 0;
+    }
+    return 0;
   } catch (error) {
+    console.error('Error reading XP from Firebase', error);
     return 0;
   }
 };
 
 const saveUserXp = async (xp: number) => {
   try {
-    await AsyncStorage.setItem(USER_XP_KEY, xp.toString());
+    const user = auth().currentUser;
+    if (!user) return;
+
+    await firestore().collection('user_about').doc(user.uid).set({
+      xp: firestore.FieldValue.increment(xp) // We increment directly for atomic update if saving delta
+    }, { merge: true });
+    
   } catch (error) {
-    console.error('Error saving XP', error);
+    console.error('Error saving XP to Firebase', error);
   }
 };
 
@@ -66,29 +100,50 @@ const saveUserXp = async (xp: number) => {
 
 const unlockAchievement = async (achievementId: AchievementId) => {
   try {
-    console.log(`[Achievements Local] Checking unlock for: ${achievementId}`);
-    const unlocked = await getUnlockedAchievements();
+    const user = auth().currentUser;
+    if (!user) return false;
 
-    if (unlocked[achievementId]) {
-      console.log(`[Achievements Local] ${achievementId} is already unlocked.`);
+    console.log(`[Achievements Firebase] Checking unlock for: ${achievementId}`);
+    
+    // Check if it already exists in Firestore
+    const querySnapshot = await firestore()
+      .collection('user_achievements')
+      .where('userId', '==', user.uid)
+      .where('id', '==', achievementId)
+      .where('completed', '==', true)
+      .limit(1)
+      .get();
+
+    if (!querySnapshot.empty) {
+      console.log(`[Achievements Firebase] ${achievementId} is already unlocked.`);
       return false; // Already unlocked
     }
 
     const achievement = ACHIEVEMENTS[achievementId];
-    console.log(`[Achievements Local] Unlocking ${achievementId}...`);
+    console.log(`[Achievements Firebase] Unlocking ${achievementId}...`);
     
-    // Save achievement
-    unlocked[achievementId] = {
-      id: achievementId,
+    // Save achievement to Firestore
+    await firestore().collection('user_achievements').add({
+      userId: user.uid,
+      id: achievement.id,
+      title: achievement.title,
+      description: achievement.description,
+      xpReward: achievement.xpReward,
+      icon: achievement.icon,
+      completed: true,
       unlockedAt: Date.now()
-    };
-    await AsyncStorage.setItem(ACHIEVEMENTS_STORAGE_KEY, JSON.stringify(unlocked));
+    });
     
-    // Update XP
-    const currentXp = await getUserXp();
-    await saveUserXp(currentXp + achievement.xpReward);
+    // Add XP delta directly via FieldValue.increment
+    try {
+      await firestore().collection('user_about').doc(user.uid).set({
+        xp: firestore.FieldValue.increment(achievement.xpReward)
+      }, { merge: true });
+    } catch (xpErr) {
+       console.error('Error saving XP', xpErr);
+    }
 
-    console.log(`[Achievements Local] Successfully unlocked ${achievementId}!`);
+    console.log(`[Achievements Firebase] Successfully unlocked ${achievementId}!`);
 
     // Emit event for in-app toast
     AppEvents.emit('ACHIEVEMENT_UNLOCKED', achievement);
@@ -106,12 +161,12 @@ const unlockAchievement = async (achievementId: AchievementId) => {
         trigger: null,
       });
     } catch (notifErr) {
-      console.log(`[Achievements Local] Notification error:`, notifErr);
+      console.log(`[Achievements Firebase] Notification error:`, notifErr);
     }
 
     return true;
   } catch (error) {
-    console.error(`[Achievements Local] Error unlocking ${achievementId}:`, error);
+    console.error(`[Achievements Firebase] Error unlocking ${achievementId}:`, error);
     return false;
   }
 };
