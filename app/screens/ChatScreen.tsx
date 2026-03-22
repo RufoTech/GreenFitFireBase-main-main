@@ -26,6 +26,8 @@ const SURFACE_CONTAINER_HIGH = "#1e2114";
 const TEXT_WHITE = "#fdfdec";
 const TEXT_MUTED = "#abac9c";
 
+const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+
 export default function ChatScreen() {
   const router = useRouter();
   const { friendId, friendName, friendPhoto } = useLocalSearchParams();
@@ -56,10 +58,13 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!chatId) return;
 
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
     const unsubscribe = firestore()
       .collection('chats')
       .doc(chatId)
       .collection('messages')
+      .where('createdAt', '>=', firestore.Timestamp.fromDate(yesterday))
       .orderBy('createdAt', 'desc')
       .onSnapshot(snapshot => {
         if (!snapshot) return;
@@ -82,6 +87,27 @@ export default function ChatScreen() {
 
     return () => unsubscribe();
   }, [chatId]);
+
+  const sendPushNotification = async (text: string) => {
+    try {
+      if (!user) return;
+      const token = await user.getIdToken();
+      await fetch(`${API_URL}/api/notifications/chat`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          receiverId: friendId,
+          senderName: user.displayName || user.email || 'A Friend',
+          text: text
+        })
+      });
+    } catch (e) {
+      console.error("Error sending push notification:", e);
+    }
+  };
 
   const sendMessage = async () => {
     if (!inputText.trim() || !user || !chatId) return;
@@ -108,6 +134,9 @@ export default function ChatScreen() {
         lastMessageTime: messageData.createdAt,
         participants: [user.uid, friendId]
       }, { merge: true });
+
+      // Trigger push notification to the receiver securely via backend
+      sendPushNotification(messageData.text);
 
     } catch (error) {
       console.error("Error sending message:", error);
@@ -171,6 +200,9 @@ export default function ChatScreen() {
         lastMessageTime: firestore.FieldValue.serverTimestamp(),
         participants: [user.uid, friendId]
       }, { merge: true });
+
+      // Trigger push notification to the receiver securely via backend
+      sendPushNotification(messageData.text);
 
     } catch (error) {
       console.error("Error sharing item:", error);
@@ -332,6 +364,14 @@ export default function ChatScreen() {
           inverted={true} // Newest messages at bottom
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={() => (
+            <View style={{ padding: 16, alignItems: 'center', marginBottom: 8, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 8 }}>
+              <MaterialIcons name="timer" size={16} color={TEXT_MUTED} style={{ marginBottom: 4 }} />
+              <Text style={{ color: TEXT_MUTED, fontSize: 12, textAlign: 'center' }}>
+                Mesajlar 24 saatdan sonra avtomatik silinir.
+              </Text>
+            </View>
+          )}
         />
 
         {/* Input Area */}

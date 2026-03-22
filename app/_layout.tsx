@@ -1,13 +1,15 @@
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold, useFonts } from '@expo-google-fonts/inter';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import messaging from '@react-native-firebase/messaging';
+import firestore from '@react-native-firebase/firestore';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as Notifications from 'expo-notifications';
 import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -81,11 +83,45 @@ export default function RootLayout() {
   function onAuthStateChanged(user: FirebaseAuthTypes.User | null) {
     setUser(user);
     if (initializing) setInitializing(false);
+
+    if (user) {
+      messaging().getToken().then(token => {
+        firestore().collection('user_about').doc(user.uid).set({
+          fcmToken: token,
+          isOnline: true,
+          lastSeen: firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(err => console.error('Error saving FCM Token:', err));
+      }).catch(err => console.error('Failed to get FCM token:', err));
+    }
   }
 
   useEffect(() => {
     const subscriber = auth().onAuthStateChanged(onAuthStateChanged);
     return subscriber; // unsubscribe on unmount
+  }, []);
+
+  // Online/Offline presence tracking via AppState
+  const appState = useRef(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      const currentUser = auth().currentUser;
+      if (!currentUser) return;
+
+      if (nextAppState === 'active') {
+        firestore().collection('user_about').doc(currentUser.uid).set({
+          isOnline: true,
+          lastSeen: firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(err => console.error('Presence update error:', err));
+      } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+        firestore().collection('user_about').doc(currentUser.uid).set({
+          isOnline: false,
+          lastSeen: firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(err => console.error('Presence update error:', err));
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => subscription.remove();
   }, []);
 
   useEffect(() => {

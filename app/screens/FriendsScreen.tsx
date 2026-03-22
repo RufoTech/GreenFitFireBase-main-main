@@ -34,7 +34,7 @@ export default function FriendsScreen() {
   const router = useRouter();
   const user = auth().currentUser;
 
-  const [activeTab, setActiveTab] = useState<'Following' | 'Followers' | 'Requests'>('Following');
+  const [activeTab, setActiveTab] = useState<'Friends' | 'Requests'>('Friends');
   const [isAddFriendModalVisible, setIsAddFriendModalVisible] = useState(false);
 
   // Data states
@@ -231,7 +231,7 @@ export default function FriendsScreen() {
     });
   };
 
-  const renderFriendItem = (item: any, type: 'following' | 'followers' | 'requests') => {
+  const renderFriendItem = (item: any, type: 'friends' | 'requests') => {
     const displayUser = item.user;
     if (!displayUser) return null;
 
@@ -248,7 +248,7 @@ export default function FriendsScreen() {
         onPress={() => {
           if (type !== 'requests') {
             openChat(
-              type === 'following' ? item.receiverId : item.senderId,
+              item.receiverId === user?.uid ? item.senderId : item.receiverId,
               displayName,
               displayPhoto
             );
@@ -262,7 +262,7 @@ export default function FriendsScreen() {
                 source={{ uri: displayPhoto }} 
                 style={styles.avatar} 
               />
-              <View style={[styles.onlineIndicator, { backgroundColor: '#abac9c' }]} />
+              <View style={[styles.onlineIndicator, { backgroundColor: displayUser.isOnline ? '#4ade80' : '#abac9c' }]} />
             </View>
             <TouchableOpacity 
               style={styles.viewProfileMiniBtn}
@@ -270,7 +270,7 @@ export default function FriendsScreen() {
                 e.stopPropagation();
                 router.push({
                   pathname: '/screens/AthleteProfileScreen',
-                  params: { userId: type === 'following' ? item.receiverId : (type === 'followers' ? item.senderId : item.senderId) }
+                  params: { userId: item.receiverId === user?.uid ? item.senderId : item.receiverId }
                 });
               }}
             >
@@ -280,7 +280,7 @@ export default function FriendsScreen() {
           <View style={styles.friendDetails}>
             <Text style={styles.friendName}>{displayName}</Text>
             <Text style={styles.friendActivity}>
-              {type === 'requests' ? 'Wants to be friends' : 'Active recently'}
+              {type === 'requests' ? 'Wants to be friends' : (displayUser.isOnline ? 'Online' : 'Offline')}
             </Text>
           </View>
         </View>
@@ -296,7 +296,19 @@ export default function FriendsScreen() {
               </TouchableOpacity>
             </>
           ) : (
-             <View style={{ width: 40 }} /> /* Empty placeholder since card opens chat */
+             <TouchableOpacity 
+               style={[styles.actionBtnPrimary, { backgroundColor: '#4a5e00' }]}
+               onPress={(e) => {
+                 e.stopPropagation();
+                 openChat(
+                   item.receiverId === user?.uid ? item.senderId : item.receiverId,
+                   displayName,
+                   displayPhoto
+                 );
+               }}
+             >
+                <MaterialIcons name="chat" size={20} color={PRIMARY} />
+             </TouchableOpacity>
           )}
         </View>
       </TouchableOpacity>
@@ -333,16 +345,10 @@ export default function FriendsScreen() {
           {/* Custom Tabs */}
           <View style={styles.tabsContainer}>
             <TouchableOpacity 
-              style={[styles.tabButton, activeTab === 'Following' && styles.activeTabButton]}
-              onPress={() => setActiveTab('Following')}
+              style={[styles.tabButton, activeTab === 'Friends' && styles.activeTabButton]}
+              onPress={() => setActiveTab('Friends')}
             >
-              <Text style={[styles.tabText, activeTab === 'Following' && styles.activeTabText]}>FOLLOWING</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.tabButton, activeTab === 'Followers' && styles.activeTabButton]}
-              onPress={() => setActiveTab('Followers')}
-            >
-              <Text style={[styles.tabText, activeTab === 'Followers' && styles.activeTabText]}>FOLLOWERS</Text>
+              <Text style={[styles.tabText, activeTab === 'Friends' && styles.activeTabText]}>FRIENDS</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.tabButton, activeTab === 'Requests' && styles.activeTabButton]}
@@ -368,11 +374,11 @@ export default function FriendsScreen() {
         <View style={styles.friendsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              {activeTab === 'Requests' ? 'Pending Requests' : 'Active Friends'}
+              {activeTab === 'Requests' ? 'Pending Requests' : 'Friends'}
             </Text>
             {activeTab !== 'Requests' && (
               <Text style={styles.onlineCount}>
-                {(activeTab === 'Following' ? following : followers).length} TOTAL
+                {(following.length + followers.length)} TOTAL
               </Text>
             )}
           </View>
@@ -381,18 +387,42 @@ export default function FriendsScreen() {
             <ActivityIndicator size="large" color={PRIMARY} style={{ marginTop: 20 }} />
           ) : (
             <View style={styles.friendsList}>
-              {activeTab === 'Following' && following.length === 0 && (
-                <Text style={{ color: TEXT_MUTED }}>You are not following anyone yet.</Text>
-              )}
-              {activeTab === 'Followers' && followers.length === 0 && (
-                <Text style={{ color: TEXT_MUTED }}>No followers yet.</Text>
+              {activeTab === 'Friends' && following.length === 0 && followers.length === 0 && (
+                <Text style={{ color: TEXT_MUTED }}>You haven't added any friends yet.</Text>
               )}
               {activeTab === 'Requests' && requests.length === 0 && (
                 <Text style={{ color: TEXT_MUTED }}>No pending requests.</Text>
               )}
 
-              {activeTab === 'Following' && following.map(item => renderFriendItem(item, 'following'))}
-              {activeTab === 'Followers' && followers.map(item => renderFriendItem(item, 'followers'))}
+              {activeTab === 'Friends' && (following.length > 0 || followers.length > 0) && (
+                <>
+                  {/* Active Friends */}
+                  {[...following, ...followers].filter(item => item.user?.isOnline).length > 0 && (
+                    <>
+                      <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Active Friends</Text>
+                        <Text style={styles.onlineCount}>
+                          {[...following, ...followers].filter(item => item.user?.isOnline).length} ONLINE
+                        </Text>
+                      </View>
+                      {[...following, ...followers].filter(item => item.user?.isOnline).map(item => renderFriendItem(item, 'friends'))}
+                    </>
+                  )}
+
+                  {/* Offline Friends */}
+                  {[...following, ...followers].filter(item => !item.user?.isOnline).length > 0 && (
+                    <>
+                      <View style={[styles.sectionHeader, { marginTop: 16 }]}>
+                        <Text style={styles.sectionTitle}>Offline Friends</Text>
+                        <Text style={styles.onlineCount}>
+                          {[...following, ...followers].filter(item => !item.user?.isOnline).length} OFFLINE
+                        </Text>
+                      </View>
+                      {[...following, ...followers].filter(item => !item.user?.isOnline).map(item => renderFriendItem(item, 'friends'))}
+                    </>
+                  )}
+                </>
+              )}
               {activeTab === 'Requests' && requests.map(item => renderFriendItem(item, 'requests'))}
             </View>
           )}

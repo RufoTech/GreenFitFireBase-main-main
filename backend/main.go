@@ -12,12 +12,14 @@ import (
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
+	"firebase.google.com/go/v4/messaging"
 	"google.golang.org/api/option"
 )
 
 var (
 	firebaseAuth    *auth.Client
 	firestoreClient *firestore.Client
+	messagingClient *messaging.Client
 )
 
 // Data Structures
@@ -995,6 +997,118 @@ func deleteCommunityWorkoutHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func sendChatNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Yalnız POST metoduna icazə verilir", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var payload struct {
+		ReceiverId string `json:"receiverId"`
+		SenderName string `json:"senderName"`
+		Text       string `json:"text"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+
+	// 1. Alıcının (Receiver) fcmToken-ni user_about kolleksiyasından alırıq
+	docSnap, err := firestoreClient.Collection("user_about").Doc(payload.ReceiverId).Get(ctx)
+	if err != nil {
+		log.Printf("Receiver user_about tapılmadı: %v", err)
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	data := docSnap.Data()
+	fcmToken, ok := data["fcmToken"].(string)
+	if !ok || fcmToken == "" {
+		// FCM token yoxdursa notification göndərmirik
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "User has no FCM token. Notification skipped.",
+		})
+		return
+	}
+
+	// 2. Mesajı (Push Notification) hazırlayırıq
+	message := &messaging.Message{
+		Token: fcmToken,
+		Notification: &messaging.Notification{
+			Title: payload.SenderName,
+			Body:  payload.Text,
+		},
+		Data: map[string]string{
+			"type":       "chat_message",
+			"senderName": payload.SenderName,
+		},
+	}
+
+	// 3. Mesajı göndəririk
+	response, err := messagingClient.Send(ctx, message)
+	if err != nil {
+		log.Printf("Xəta: Push notification göndərilmədi: %v", err)
+		http.Error(w, "Failed to send notification", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Notification sent successfully",
+		"response": response,
+	})
+}
+
+func startMessageCleanupJob() {
+	ticker := time.NewTicker(1 * time.Hour)
+	go func() {
+		// İlk dəfə həmən işləsin deyə
+		runCleanup()
+		for range ticker.C {
+			runCleanup()
+		}
+	}()
+}
+
+func runCleanup() {
+	log.Println("Running message cleanup job...")
+	ctx := context.Background()
+	
+	// 24 saatdan əvvəlki vaxtı tapırıq
+	cutoff := time.Now().Add(-24 * time.Hour)
+	
+	// Bütün chat-ları alırıq
+	chatIter := firestoreClient.Collection("chats").Documents(ctx)
+	chats, err := chatIter.GetAll()
+	if err != nil {
+		log.Printf("Error fetching chats for cleanup: %v", err)
+		return
+	}
+	
+	deletedCount := 0
+	for _, chat := range chats {
+		// Hər chat-ın içindəki messages alt-kolleksiyasına baxırıq
+		msgIter := chat.Ref.Collection("messages").Where("createdAt", "<", cutoff).Documents(ctx)
+		msgs, err := msgIter.GetAll()
+		if err != nil {
+			log.Printf("Error fetching messages for chat %s: %v", chat.Ref.ID, err)
+			continue
+		}
+		
+		for _, msg := range msgs {
+			_, err := msg.Ref.Delete(ctx)
+			if err == nil {
+				deletedCount++
+			}
+		}
+	}
+	log.Printf("Message cleanup job finished. Deleted %d old messages.", deletedCount)
+}
+
 func main() {
 	// 1. Firebase üçün context yaradırıq
 	ctx := context.Background()
@@ -1021,7 +1135,16 @@ func main() {
 	}
 	defer firestoreClient.Close()
 
-	fmt.Println("Firebase (Auth və Firestore) uğurla qoşuldu!")
+	// 6. Messaging klientini yaradırıq (Bildirişlər/FCM üçün)
+	messagingClient, err = app.Messaging(ctx)
+	if err != nil {
+		log.Fatalf("Messaging xətası: %v\n", err)
+	}
+
+	fmt.Println("Firebase (Auth, Firestore və Messaging) uğurla qoşuldu!")
+
+	// Mesaj silinmə job-unu (arka planda) başladırıq
+	startMessageCleanupJob()
 
 	// Rotalar (Routes)
 	// Açıq rota (Token tələb etmir)
@@ -1050,6 +1173,9 @@ func main() {
 	http.HandleFunc("/api/community/download-workout", authMiddleware(downloadCommunityWorkoutHandler))
 	http.HandleFunc("/api/community/delete-program", authMiddleware(deleteCommunityProgramHandler))
 	http.HandleFunc("/api/community/delete-workout", authMiddleware(deleteCommunityWorkoutHandler))
+
+	// NOTIFICATION ROUTES
+	http.HandleFunc("/api/notifications/chat", authMiddleware(sendChatNotificationHandler))
 
 	fmt.Println("Server http://localhost:8080 ünvanında dinləyir...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
