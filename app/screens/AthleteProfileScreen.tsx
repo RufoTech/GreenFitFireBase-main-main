@@ -66,12 +66,10 @@ export default function AthleteProfileScreen() {
           
         setFriendsCount(sentFriendsSnapshot.size + receivedFriendsSnapshot.size);
 
-        // 3. Load Shared Workouts (customUserWorkouts that are shared in community)
-        // Assuming there is a field 'isShared: true' or similar logic. If not, we just fetch their workouts.
+        // 3. Load Shared Workouts from community_shared_workouts
         const workoutsSnapshot = await firestore()
-          .collection('customUserWorkouts')
-          .where('userId', '==', user.uid)
-          // .where('isShared', '==', true) // Add this if you only want community shared ones
+          .collection('community_shared_workouts')
+          .where('authorId', '==', user.uid)
           .get();
         
         const workoutsList = workoutsSnapshot.docs.map(doc => ({
@@ -229,7 +227,7 @@ export default function AthleteProfileScreen() {
               sharedWorkouts.map((workout) => (
                 <TouchableOpacity key={workout.id} style={styles.workoutCard} activeOpacity={0.9}>
                   <ImageBackground 
-                    source={{ uri: workout.image || 'https://via.placeholder.com/400x200' }}
+                    source={{ uri: workout.coverImage || workout.image || 'https://via.placeholder.com/400x200' }}
                     style={styles.workoutImage}
                   >
                     <View style={styles.workoutImageOverlay} />
@@ -249,8 +247,8 @@ export default function AthleteProfileScreen() {
                     </View>
                     <View style={styles.workoutDetailsRow}>
                       <View style={styles.workoutDetailItem}>
-                        <MaterialIcons name="bolt" size={14} color={PRIMARY} />
-                        <Text style={[styles.workoutDetailText, { color: TEXT_MUTED }]}>{workout.calories || 0} KCAL</Text>
+                        <MaterialIcons name="fitness-center" size={14} color={PRIMARY} />
+                        <Text style={[styles.workoutDetailText, { color: TEXT_MUTED }]}>{workout.difficulty || 'General'}</Text>
                       </View>
                     </View>
                   </View>
