@@ -1,8 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
     ActivityIndicator,
     Image,
@@ -37,7 +37,7 @@ export default function AthleteProfileScreen() {
   const isOwnProfile = !userId || userId === currentUser?.uid;
   const profileUserId = (isOwnProfile ? currentUser?.uid : userId) as string;
 
-  const [activeTab, setActiveTab] = useState<'Workouts' | 'Posts' | 'Badges'>('Workouts');
+  const [activeTab, setActiveTab] = useState<'Workouts' | 'Monthly' | 'Badges'>('Workouts');
   const [userData, setUserData] = useState<any>(null);
   const [friendsCount, setFriendsCount] = useState(0);
   const [sharedWorkouts, setSharedWorkouts] = useState<any[]>([]);
@@ -46,7 +46,8 @@ export default function AthleteProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
     if (!profileUserId) return;
 
     const loadProfileData = async () => {
@@ -118,7 +119,7 @@ export default function AthleteProfileScreen() {
     };
 
     loadProfileData();
-  }, [profileUserId]);
+  }, [profileUserId]));
 
   const displayName = userData?.fullname || userData?.displayName || userData?.name || userData?.mail || currentUser?.email || 'Athlete';
   const displayPhoto = userData?.photoURL || userData?.avatar || 'https://via.placeholder.com/150';
@@ -211,13 +212,16 @@ export default function AthleteProfileScreen() {
           <Text style={styles.profileName}>{displayName}</Text>
           
           <Text style={styles.profileBio}>
-            Strength & Conditioning | Powerlifter | Training for the Titan Nationals 2024. <Text style={styles.bioHighlight}>Never settle.</Text>
+            {userData?.bio || "Fitness enthusiast. Ready to crush goals!"}
           </Text>
 
           <View style={styles.actionButtons}>
             {isOwnProfile ? (
               <>
-                <TouchableOpacity style={styles.actionBtn}>
+                <TouchableOpacity 
+                  style={styles.actionBtn}
+                  onPress={() => router.push('/screens/EditProfileScreen')}
+                >
                   <Text style={styles.actionBtnText}>EDIT PROFILE</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.actionBtn}>
@@ -267,7 +271,7 @@ export default function AthleteProfileScreen() {
 
         {/* Activity Tabs */}
         <View style={styles.tabsContainer}>
-          {(['Workouts', 'Posts', 'Badges'] as const).map((tab) => (
+          {(['Workouts', 'Monthly', 'Badges'] as const).map((tab) => (
             <TouchableOpacity 
               key={tab} 
               style={[styles.tabBtn, activeTab === tab && styles.activeTabBtn]}
@@ -348,7 +352,7 @@ export default function AthleteProfileScreen() {
         )}
 
         {/* Posts Content (Monthly Programs) */}
-        {activeTab === 'Posts' && (
+        {activeTab === 'Monthly' && (
           <View style={styles.workoutsList}>
             {sharedPrograms.length > 0 ? (
               sharedPrograms.map((program) => (
