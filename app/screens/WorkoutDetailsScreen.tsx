@@ -125,13 +125,20 @@ export default function WorkoutDetailsScreen() {
         if (isCustom === 'true') {
              const customDoc = await firestore().collection('customUserWorkouts').doc(docId).get();
              if (customDoc.exists) {
-                 rawData = customDoc.data();
+                 rawData = customDoc.data() || {};
                  rawData.id = customDoc.id;
              }
          } else {
-            const workoutDoc = await firestore().collection('workout_programs').doc(docId).get();
+            // First check workout_programs
+            let workoutDoc = await firestore().collection('workout_programs').doc(docId).get();
+            
+            // If not found, fallback to community_shared_workouts
+            if (!workoutDoc.exists) {
+               workoutDoc = await firestore().collection('community_shared_workouts').doc(docId).get();
+            }
+
             if (workoutDoc.exists) {
-              rawData = workoutDoc.data();
+              rawData = workoutDoc.data() || {};
               rawData.id = workoutDoc.id;
             }
         }
@@ -698,10 +705,6 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  summaryIcon: {
-    marginBottom: 4,
-    color: '#ccff00', // text-primary
   },
   summaryIcon: {
     marginBottom: 4,

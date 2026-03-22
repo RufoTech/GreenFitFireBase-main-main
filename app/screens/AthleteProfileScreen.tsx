@@ -225,7 +225,15 @@ export default function AthleteProfileScreen() {
           <View style={styles.workoutsList}>
             {sharedWorkouts.length > 0 ? (
               sharedWorkouts.map((workout) => (
-                <TouchableOpacity key={workout.id} style={styles.workoutCard} activeOpacity={0.9}>
+                <TouchableOpacity 
+                  key={workout.id} 
+                  style={styles.workoutCard} 
+                  activeOpacity={0.9}
+                  onPress={() => router.push({
+                    pathname: '/screens/WorkoutDetailsScreen',
+                    params: { id: workout.id, fromLibrary: 'true' }
+                  })}
+                >
                   <ImageBackground 
                     source={{ uri: workout.coverImage || workout.image || 'https://via.placeholder.com/400x200' }}
                     style={styles.workoutImage}
@@ -272,7 +280,15 @@ export default function AthleteProfileScreen() {
           <View style={styles.workoutsList}>
             {sharedPrograms.length > 0 ? (
               sharedPrograms.map((program) => (
-                <TouchableOpacity key={program.id} style={styles.workoutCard} activeOpacity={0.9}>
+                <TouchableOpacity 
+                  key={program.id} 
+                  style={styles.workoutCard} 
+                  activeOpacity={0.9}
+                  onPress={() => router.push({
+                    pathname: '/screens/WeeklyProgramScreen',
+                    params: { programId: program.id }
+                  })}
+                >
                   <ImageBackground 
                     source={{ uri: program.coverImage || 'https://via.placeholder.com/400x200' }}
                     style={styles.workoutImage}
