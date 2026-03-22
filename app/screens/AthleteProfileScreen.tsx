@@ -28,6 +28,8 @@ const TEXT_WHITE = "#fdfdec";
 const TEXT_MUTED = "#abac9c";
 const OUTLINE_VARIANT = "rgba(71, 73, 60, 0.2)";
 
+const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+
 export default function AthleteProfileScreen() {
   const router = useRouter();
   const user = auth().currentUser;
@@ -39,6 +41,7 @@ export default function AthleteProfileScreen() {
   const [sharedPrograms, setSharedPrograms] = useState<any[]>([]);
   const [completedAchievements, setCompletedAchievements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -47,7 +50,8 @@ export default function AthleteProfileScreen() {
       try {
         // 1. Load User Info from user_about
         const userDoc = await firestore().collection('user_about').doc(user.uid).get();
-        if (userDoc.exists) {
+        const userExists = typeof userDoc.exists === 'function' ? userDoc.exists() : userDoc.exists;
+        if (userExists) {
           setUserData(userDoc.data());
         }
 
@@ -78,11 +82,10 @@ export default function AthleteProfileScreen() {
         }));
         setSharedWorkouts(workoutsList);
 
-        // 4. Load Shared Monthly Programs (user_programs) -> mapping to 'Posts' tab
+        // 4. Load Shared Monthly Programs (community_shared_programs) -> mapping to 'Posts' tab
         const programsSnapshot = await firestore()
-          .collection('user_programs')
-          .where('userId', '==', user.uid)
-          // .where('isShared', '==', true) // Add this if needed
+          .collection('community_shared_programs')
+          .where('authorId', '==', user.uid)
           .get();
           
         const programsList = programsSnapshot.docs.map(doc => ({
@@ -116,6 +119,54 @@ export default function AthleteProfileScreen() {
 
   const displayName = userData?.fullname || userData?.displayName || userData?.name || userData?.mail || user?.email || 'Athlete';
   const displayPhoto = userData?.photoURL || userData?.avatar || 'https://via.placeholder.com/150';
+
+  const handleDeleteActivity = (item: any, type: 'workout' | 'program') => {
+    import('react-native').then(({ Alert }) => {
+        Alert.alert(
+          "Silinməni Təsdiqlə",
+          "Bu məşqi profilinizdən və icmadan (community) silmək istədiyinizə əminsiniz?",
+          [
+            { text: "Ləğv et", style: "cancel" },
+            { 
+              text: "Sil", 
+              style: "destructive",
+              onPress: async () => {
+                 if (!user) return;
+                 setDeletingId(item.id);
+                 try {
+                    const token = await user.getIdToken();
+                    const endpoint = type === 'program' ? '/api/community/delete-program' : '/api/community/delete-workout';
+                    
+                    const response = await fetch(`${API_URL}${endpoint}`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ itemId: item.id })
+                    });
+    
+                    if (!response.ok) {
+                      throw new Error('Failed to delete item');
+                    }
+    
+                    if (type === 'workout') {
+                        setSharedWorkouts(prev => prev.filter(i => i.id !== item.id));
+                    } else {
+                        setSharedPrograms(prev => prev.filter(i => i.id !== item.id));
+                    }
+                 } catch (error) {
+                    console.error("Error deleting item:", error);
+                    Alert.alert("Xəta", "Silinmə zamanı xəta baş verdi.");
+                 } finally {
+                    setDeletingId(null);
+                 }
+              }
+            }
+          ]
+        );
+    });
+  };
 
   if (loading) {
     return (
@@ -207,7 +258,7 @@ export default function AthleteProfileScreen() {
 
         {/* Activity Tabs */}
         <View style={styles.tabsContainer}>
-          {['Workouts', 'Posts', 'Badges'].map((tab) => (
+          {(['Workouts', 'Posts', 'Badges'] as const).map((tab) => (
             <TouchableOpacity 
               key={tab} 
               style={[styles.tabBtn, activeTab === tab && styles.activeTabBtn]}
@@ -250,8 +301,18 @@ export default function AthleteProfileScreen() {
                   </ImageBackground>
                   <View style={styles.workoutInfo}>
                     <View style={styles.workoutTitleRow}>
-                      <Text style={styles.workoutTitle}>{workout.title || 'Untitled'}</Text>
-                      <MaterialIcons name="more-vert" size={20} color={TEXT_MUTED} />
+                      <Text style={styles.workoutTitle}>{workout.title || workout.name || 'Untitled'}</Text>
+                      <TouchableOpacity 
+                        onPress={(e) => { e.stopPropagation(); handleDeleteActivity(workout, 'workout'); }}
+                        disabled={deletingId === workout.id}
+                        style={{ padding: 4 }}
+                      >
+                        {deletingId === workout.id ? (
+                           <ActivityIndicator size="small" color="#ef4444" />
+                        ) : (
+                           <MaterialIcons name="delete" size={20} color="#ef4444" />
+                        )}
+                      </TouchableOpacity>
                     </View>
                     <View style={styles.workoutDetailsRow}>
                       <View style={styles.workoutDetailItem}>
@@ -306,7 +367,17 @@ export default function AthleteProfileScreen() {
                   <View style={styles.workoutInfo}>
                     <View style={styles.workoutTitleRow}>
                       <Text style={styles.workoutTitle}>{program.name || 'Untitled Program'}</Text>
-                      <MaterialIcons name="more-vert" size={20} color={TEXT_MUTED} />
+                      <TouchableOpacity 
+                        onPress={(e) => { e.stopPropagation(); handleDeleteActivity(program, 'program'); }}
+                        disabled={deletingId === program.id}
+                        style={{ padding: 4 }}
+                      >
+                        {deletingId === program.id ? (
+                           <ActivityIndicator size="small" color="#ef4444" />
+                        ) : (
+                           <MaterialIcons name="delete" size={20} color="#ef4444" />
+                        )}
+                      </TouchableOpacity>
                     </View>
                     <View style={styles.workoutDetailsRow}>
                       <View style={styles.workoutDetailItem}>
