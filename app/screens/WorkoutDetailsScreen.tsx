@@ -124,7 +124,8 @@ export default function WorkoutDetailsScreen() {
 
         if (isCustom === 'true') {
              const customDoc = await firestore().collection('customUserWorkouts').doc(docId).get();
-             if (customDoc.exists) {
+             const customExists = typeof customDoc.exists === 'function' ? customDoc.exists() : customDoc.exists;
+             if (customExists) {
                  rawData = customDoc.data() || {};
                  rawData.id = customDoc.id;
              }
@@ -132,14 +133,42 @@ export default function WorkoutDetailsScreen() {
             // First check workout_programs
             let workoutDoc = await firestore().collection('workout_programs').doc(docId).get();
             
+            const workoutExists = typeof workoutDoc.exists === 'function' ? workoutDoc.exists() : workoutDoc.exists;
+
             // If not found, fallback to community_shared_workouts
-            if (!workoutDoc.exists) {
-               workoutDoc = await firestore().collection('community_shared_workouts').doc(docId).get();
+            if (!workoutExists) {
+               const sharedDoc = await firestore().collection('community_shared_workouts').doc(docId).get();
+               const sharedExists = typeof sharedDoc.exists === 'function' ? sharedDoc.exists() : sharedDoc.exists;
+
+               if (sharedExists) {
+                   const sharedData = sharedDoc.data() || {};
+                   if (sharedData.originalId) {
+                       const originalDoc = await firestore().collection('workout_programs').doc(sharedData.originalId).get();
+                       const originalExists = typeof originalDoc.exists === 'function' ? originalDoc.exists() : originalDoc.exists;
+                       if (originalExists) {
+                           workoutDoc = originalDoc;
+                       } else {
+                           const customOriginalDoc = await firestore().collection('customUserWorkouts').doc(sharedData.originalId).get();
+                           const customOriginalExists = typeof customOriginalDoc.exists === 'function' ? customOriginalDoc.exists() : customOriginalDoc.exists;
+                           if (customOriginalExists) {
+                               workoutDoc = customOriginalDoc;
+                           } else {
+                               workoutDoc = sharedDoc;
+                           }
+                       }
+                   } else {
+                       workoutDoc = sharedDoc;
+                   }
+               }
             }
 
-            if (workoutDoc.exists) {
+            const finalExists = typeof workoutDoc.exists === 'function' ? workoutDoc.exists() : workoutDoc.exists;
+            if (workoutDoc && finalExists) {
               rawData = workoutDoc.data() || {};
               rawData.id = workoutDoc.id;
+              
+              // DEBUG: Let user see what fields are caught by rawData
+              // Alert.alert("Debug Payload", JSON.stringify({ name: rawData.name, title: rawData.title, duration: rawData.duration }));
             }
         }
 
@@ -217,10 +246,10 @@ export default function WorkoutDetailsScreen() {
             setWorkout({
                 id: rawData.id,
                 name: rawData.name || rawData.title || 'Untitled Workout',
-                level: rawData.level || 'General',
-                duration: rawData.duration || '0',
+                level: rawData.level || rawData.difficulty || 'General',
+                duration: String(rawData.duration || '0'),
                 equipment: Array.isArray(rawData.equipment) ? rawData.equipment : (rawData.equipment ? [rawData.equipment] : []),
-                targetMuscles: Array.isArray(rawData.targetMuscles) ? rawData.targetMuscles : (rawData.targetMuscles ? [rawData.targetMuscles] : []),
+                targetMuscles: Array.isArray(rawData.targetMuscles) ? rawData.targetMuscles : (rawData.targetMuscles ? [rawData.targetMuscles] : (rawData.targetMuscle ? [rawData.targetMuscle] : [])),
                 coverImage: rawData.coverImage || rawData.image || 'https://via.placeholder.com/300',
                 exercises: processedExercises,
                 workoutTarget: rawData.workoutTarget || '',
