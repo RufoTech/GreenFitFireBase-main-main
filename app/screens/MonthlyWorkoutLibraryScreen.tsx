@@ -322,13 +322,6 @@ export default function MonthlyWorkoutLibraryScreen() {
               
               const token = await user.getIdToken();
               
-              // First fetch the program weeks since it's in a separate collection
-              const weeksDoc = await firestore().collection('user_program_weeks').doc(program.id).get();
-              let weeksData = {};
-              if (weeksDoc.exists) {
-                weeksData = weeksDoc.data()?.weeks || {};
-              }
-
               const payload = {
                 originalId: program.id,
                 authorName: user.displayName || user.email || 'Anonymous User',
@@ -336,8 +329,7 @@ export default function MonthlyWorkoutLibraryScreen() {
                 focus: program.level || 'General',
                 coverImage: program.image || null,
                 workoutCount: program.workoutCount || 0,
-                totalDuration: program.totalDuration || 0,
-                weeks: weeksData
+                totalDuration: program.totalDuration || 0
               };
 
               const response = await fetch(`${API_URL}/api/community/share-program`, {

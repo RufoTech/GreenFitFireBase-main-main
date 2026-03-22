@@ -521,14 +521,13 @@ func shareProgramToCommunityHandler(w http.ResponseWriter, r *http.Request) {
 	uid := token.UID
 
 	var payload struct {
-		OriginalId    string                 `json:"originalId"`
-		AuthorName    string                 `json:"authorName"`
-		Title         string                 `json:"title"`
-		Focus         string                 `json:"focus"`
-		CoverImage    string                 `json:"coverImage"`
-		WorkoutCount  int                    `json:"workoutCount"`
-		TotalDuration int                    `json:"totalDuration"`
-		Weeks         map[string]interface{} `json:"weeks"`
+		OriginalId    string `json:"originalId"`
+		AuthorName    string `json:"authorName"`
+		Title         string `json:"title"`
+		Focus         string `json:"focus"`
+		CoverImage    string `json:"coverImage"`
+		WorkoutCount  int    `json:"workoutCount"`
+		TotalDuration int    `json:"totalDuration"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -556,6 +555,32 @@ func shareProgramToCommunityHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch weeks data directly from database on backend
+	weeksDoc, err := firestoreClient.Collection("user_program_weeks").Doc(payload.OriginalId).Get(ctx)
+	var weeksData interface{}
+	
+	if err == nil && weeksDoc.Exists() {
+	    if data := weeksDoc.Data(); data != nil {
+	        if w, ok := data["weeks"]; ok {
+	            weeksData = w
+	        }
+	    }
+	} else {
+	    // Fallback if not found in user_program_weeks
+	    progDoc, err := firestoreClient.Collection("user_programs").Doc(payload.OriginalId).Get(ctx)
+	    if err == nil && progDoc.Exists() {
+	        if data := progDoc.Data(); data != nil {
+	            if w, ok := data["weeks"]; ok {
+	                weeksData = w
+	            }
+	        }
+	    }
+	}
+	
+	if weeksData == nil {
+	    weeksData = make(map[string]interface{})
+	}
+
 	// Prepare data for community_shared_programs
 	sharedData := map[string]interface{}{
 		"originalId":    payload.OriginalId,
@@ -566,7 +591,7 @@ func shareProgramToCommunityHandler(w http.ResponseWriter, r *http.Request) {
 		"coverImage":    payload.CoverImage,
 		"workoutCount":  payload.WorkoutCount,
 		"totalDuration": payload.TotalDuration,
-		"weeks":         payload.Weeks,
+		"weeks":         weeksData,
 		"createdAt":     firestore.ServerTimestamp,
 		"downloads":     0,
 		"likes":         0,
