@@ -89,17 +89,21 @@ export default function ProfileScreen() {
         
         {/* Profile Section */}
         <View style={styles.profileSection}>
-          <View style={styles.avatarContainer}>
+          <TouchableOpacity 
+            style={styles.avatarContainer}
+            activeOpacity={0.8}
+            onPress={() => router.push('/screens/AthleteProfileScreen')}
+          >
             <View style={styles.avatarBorder}>
               <Image
                 source={{ uri: user?.photoURL || 'https://lh3.googleusercontent.com/aida-public/AB6AXuB8mttEzcj68e2smSHj5-Poz8YBp9ORfWqUTtNtoWy9XwTnJ25F4N4zYevqy_BGLRYFbCRZiN92UOLn7gzGV8bgwRpkTf47Qxo3NfUAv_-RySfJS7qJSWMFn8H-QHov978AOxy1qOO_vB8rBJIAh4t6VpQj2E7uWlbZiNp0LYVOLxyvTCU0MfwzjX8xr0gccyI430Vagc3vqQeUEGUi0Lk92VB698zAw6V5T8_dPSRNBdOZetPy9v5NLYEQJ3x9ezNC4zL4nzM1WZM' }}
                 style={styles.avatar}
               />
             </View>
-            <TouchableOpacity style={styles.editButton}>
+            <View style={styles.editButton}>
               <MaterialIcons name="edit" size={16} color="#1f230f" />
-            </TouchableOpacity>
-          </View>
+            </View>
+          </TouchableOpacity>
           
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{user?.displayName || 'Alex Johnson'}</Text>
