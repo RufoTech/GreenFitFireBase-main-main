@@ -240,15 +240,42 @@ export default function FriendsScreen() {
     const displayPhoto = displayUser.photoURL || displayUser.avatar || 'https://via.placeholder.com/150';
 
     return (
-      <View key={item.id} style={styles.friendItem}>
+      // Change to TouchableOpacity to open chat on card tap
+      <TouchableOpacity 
+        key={item.id} 
+        style={styles.friendItem} 
+        activeOpacity={type === 'requests' ? 1 : 0.8}
+        onPress={() => {
+          if (type !== 'requests') {
+            openChat(
+              type === 'following' ? item.receiverId : item.senderId,
+              displayName,
+              displayPhoto
+            );
+          }
+        }}
+      >
         <View style={styles.friendInfo}>
-          <View style={styles.avatarContainer}>
-            <Image 
-              source={{ uri: displayPhoto }} 
-              style={styles.avatar} 
-            />
-            {/* Online indicator could be dynamic later */}
-            <View style={[styles.onlineIndicator, { backgroundColor: '#abac9c' }]} />
+          <View style={{ alignItems: 'center', gap: 6 }}>
+            <View style={styles.avatarContainer}>
+              <Image 
+                source={{ uri: displayPhoto }} 
+                style={styles.avatar} 
+              />
+              <View style={[styles.onlineIndicator, { backgroundColor: '#abac9c' }]} />
+            </View>
+            <TouchableOpacity 
+              style={styles.viewProfileMiniBtn}
+              onPress={(e) => {
+                e.stopPropagation();
+                router.push({
+                  pathname: '/screens/AthleteProfileScreen',
+                  params: { userId: type === 'following' ? item.receiverId : (type === 'followers' ? item.senderId : item.senderId) }
+                });
+              }}
+            >
+              <Text style={styles.viewProfileMiniText}>View Profile</Text>
+            </TouchableOpacity>
           </View>
           <View style={styles.friendDetails}>
             <Text style={styles.friendName}>{displayName}</Text>
@@ -269,19 +296,10 @@ export default function FriendsScreen() {
               </TouchableOpacity>
             </>
           ) : (
-            <TouchableOpacity 
-              style={styles.actionBtnSecondary}
-              onPress={() => openChat(
-                type === 'following' ? item.receiverId : item.senderId,
-                displayName,
-                displayPhoto
-              )}
-            >
-              <MaterialIcons name="chat-bubble" size={20} color={TEXT_MUTED} />
-            </TouchableOpacity>
+             <View style={{ width: 40 }} /> /* Empty placeholder since card opens chat */
           )}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -444,10 +462,24 @@ export default function FriendsScreen() {
                   return (
                     <View key={result.id} style={styles.searchResultItem}>
                       <View style={styles.friendInfo}>
-                        <Image 
-                          source={{ uri: displayPhoto }} 
-                          style={styles.avatar} 
-                        />
+                        <View style={{ alignItems: 'center', gap: 6 }}>
+                          <Image 
+                            source={{ uri: displayPhoto }} 
+                            style={styles.avatar} 
+                          />
+                          <TouchableOpacity 
+                            style={styles.viewProfileMiniBtn}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              router.push({
+                                pathname: '/screens/AthleteProfileScreen',
+                                params: { userId: result.id }
+                              });
+                            }}
+                          >
+                            <Text style={styles.viewProfileMiniText}>View Profile</Text>
+                          </TouchableOpacity>
+                        </View>
                         <View style={styles.friendDetails}>
                           <Text style={styles.friendName}>{displayName}</Text>
                         </View>
@@ -640,6 +672,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 4,
     borderColor: SURFACE_CONTAINER,
+  },
+  viewProfileMiniBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(204, 255, 0, 0.1)',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.3)',
+  },
+  viewProfileMiniText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: PRIMARY,
+    textAlign: 'center',
   },
   friendDetails: {
     flex: 1,
