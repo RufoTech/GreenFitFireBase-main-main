@@ -1,7 +1,10 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Image,
     ImageBackground,
     Platform,
@@ -27,7 +30,102 @@ const OUTLINE_VARIANT = "rgba(71, 73, 60, 0.2)";
 
 export default function AthleteProfileScreen() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('Workouts');
+  const user = auth().currentUser;
+
+  const [activeTab, setActiveTab] = useState<'Workouts' | 'Posts' | 'Badges'>('Workouts');
+  const [userData, setUserData] = useState<any>(null);
+  const [friendsCount, setFriendsCount] = useState(0);
+  const [sharedWorkouts, setSharedWorkouts] = useState<any[]>([]);
+  const [sharedPrograms, setSharedPrograms] = useState<any[]>([]);
+  const [completedAchievements, setCompletedAchievements] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const loadProfileData = async () => {
+      try {
+        // 1. Load User Info from user_about
+        const userDoc = await firestore().collection('user_about').doc(user.uid).get();
+        if (userDoc.exists) {
+          setUserData(userDoc.data());
+        }
+
+        // 2. Count Friends (where status is 'accepted' and current user is either sender or receiver)
+        const sentFriendsSnapshot = await firestore()
+          .collection('friend_requests')
+          .where('senderId', '==', user.uid)
+          .where('status', '==', 'accepted')
+          .get();
+          
+        const receivedFriendsSnapshot = await firestore()
+          .collection('friend_requests')
+          .where('receiverId', '==', user.uid)
+          .where('status', '==', 'accepted')
+          .get();
+          
+        setFriendsCount(sentFriendsSnapshot.size + receivedFriendsSnapshot.size);
+
+        // 3. Load Shared Workouts (customUserWorkouts that are shared in community)
+        // Assuming there is a field 'isShared: true' or similar logic. If not, we just fetch their workouts.
+        const workoutsSnapshot = await firestore()
+          .collection('customUserWorkouts')
+          .where('userId', '==', user.uid)
+          // .where('isShared', '==', true) // Add this if you only want community shared ones
+          .get();
+        
+        const workoutsList = workoutsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setSharedWorkouts(workoutsList);
+
+        // 4. Load Shared Monthly Programs (user_programs) -> mapping to 'Posts' tab
+        const programsSnapshot = await firestore()
+          .collection('user_programs')
+          .where('userId', '==', user.uid)
+          // .where('isShared', '==', true) // Add this if needed
+          .get();
+          
+        const programsList = programsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setSharedPrograms(programsList);
+
+        // 5. Load Completed Achievements
+        const achievementsSnapshot = await firestore()
+          .collection('user_achievements')
+          .where('userId', '==', user.uid)
+          .where('completed', '==', true)
+          .get();
+          
+        const achievementsList = achievementsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setCompletedAchievements(achievementsList);
+
+      } catch (error) {
+        console.error("Error loading athlete profile:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfileData();
+  }, [user]);
+
+  const displayName = userData?.fullname || userData?.displayName || userData?.name || userData?.mail || user?.email || 'Athlete';
+  const displayPhoto = userData?.photoURL || userData?.avatar || 'https://via.placeholder.com/150';
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={PRIMARY} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -49,7 +147,7 @@ export default function AthleteProfileScreen() {
           <View style={styles.avatarWrapper}>
             <View style={styles.avatarGradient}>
               <Image 
-                source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBmLjYnjwuuSs3amUYsc-G5ELW9EiKa0srZ7X93CFqNgRHn-mitFx9mscSaKoMxF8DFyvdCxGe1Upd-j74WZNrYGICLHBApv3AZzRHuabCJM-GwVjK5zF2dSdZeK66SqVz583PBeLg2BldTLJTrmIJ8ObmTsHqs_9t-YX_aLUCbB2wQZL23_hx1XSxy_MYGQ96XgKKzXtJ7zsvjKVHWHOe-LsZGOBSNXGWZk8l__kiKVNctL2AFzAF4OgZ0USKH6egkQ1qfu7nkR0I' }} 
+                source={{ uri: displayPhoto }} 
                 style={styles.avatar} 
               />
             </View>
@@ -58,7 +156,7 @@ export default function AthleteProfileScreen() {
             </View>
           </View>
 
-          <Text style={styles.profileName}>Marcus Thorne</Text>
+          <Text style={styles.profileName}>{displayName}</Text>
           
           <Text style={styles.profileBio}>
             Strength & Conditioning | Powerlifter | Training for the Titan Nationals 2024. <Text style={styles.bioHighlight}>Never settle.</Text>
@@ -77,13 +175,8 @@ export default function AthleteProfileScreen() {
         {/* Stats Bar */}
         <View style={styles.statsBar}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>1.2k</Text>
-            <Text style={styles.statLabel}>FOLLOWERS</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>348</Text>
-            <Text style={styles.statLabel}>FOLLOWING</Text>
+            <Text style={styles.statValue}>{friendsCount}</Text>
+            <Text style={styles.statLabel}>FRIENDS</Text>
           </View>
         </View>
 
@@ -91,39 +184,26 @@ export default function AthleteProfileScreen() {
         <View style={styles.achievementsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Achievements</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/screens/AchievementsScreen')}>
               <Text style={styles.viewAllText}>VIEW ALL</Text>
             </TouchableOpacity>
           </View>
           
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.badgesList}>
-            <View style={styles.badgeCard}>
-              <View style={[styles.badgeIconWrapper, { backgroundColor: 'rgba(204,255,0,0.1)' }]}>
-                <MaterialIcons name="local-fire-department" size={32} color={PRIMARY} />
+            {completedAchievements.length > 0 ? (
+              completedAchievements.map((achievement, index) => (
+                <View key={achievement.id || index} style={styles.badgeCard}>
+                  <View style={[styles.badgeIconWrapper, { backgroundColor: 'rgba(204,255,0,0.1)' }]}>
+                    <MaterialIcons name="emoji-events" size={32} color={PRIMARY} />
+                  </View>
+                  <Text style={styles.badgeText}>{achievement.title || 'ACHIEVEMENT'}</Text>
+                </View>
+              ))
+            ) : (
+              <View style={[styles.badgeCard, { opacity: 0.4, width: 200 }]}>
+                <Text style={[styles.badgeText, { color: TEXT_MUTED }]}>No achievements yet</Text>
               </View>
-              <Text style={styles.badgeText}>7 DAY STREAK</Text>
-            </View>
-            
-            <View style={styles.badgeCard}>
-              <View style={[styles.badgeIconWrapper, { backgroundColor: 'rgba(236,232,86,0.1)' }]}>
-                <MaterialIcons name="fitness-center" size={32} color={SECONDARY} />
-              </View>
-              <Text style={styles.badgeText}>100KG BENCH</Text>
-            </View>
-
-            <View style={styles.badgeCard}>
-              <View style={[styles.badgeIconWrapper, { backgroundColor: 'rgba(252,224,71,0.1)' }]}>
-                <MaterialIcons name="directions-run" size={32} color={TERTIARY} />
-              </View>
-              <Text style={styles.badgeText}>ELITE RUNNER</Text>
-            </View>
-
-            <View style={[styles.badgeCard, { opacity: 0.4 }]}>
-              <View style={[styles.badgeIconWrapper, { backgroundColor: 'rgba(171,172,156,0.1)' }]}>
-                <MaterialIcons name="emoji-events" size={32} color={TEXT_MUTED} />
-              </View>
-              <Text style={styles.badgeText}>MARATHONER</Text>
-            </View>
+            )}
           </ScrollView>
         </View>
 
@@ -145,73 +225,88 @@ export default function AthleteProfileScreen() {
         {/* Workouts Content */}
         {activeTab === 'Workouts' && (
           <View style={styles.workoutsList}>
-            {/* Workout 1 */}
-            <TouchableOpacity style={styles.workoutCard} activeOpacity={0.9}>
-              <ImageBackground 
-                source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD6dcaICpicxKfNF3IphCwW5iaAkb4oDllgP9unCERdKy5W4E4Evt9nnqES1aWxnGBuyANxVrZKYxdYsotNjFFYBY_NHZo4DFgTGzBau1Z2MmBFPChtkJRRrDAP8FrK8EshhksHclTPqfQNR6u5T2prC3ll3IZRxlxJB0YRaxfCogGPVvwnZ-mlVAXJEZz64qscz8qizSKc0sknG0RUtCLEOTaXM2C9N-AaofIRMvlzuJcA0K1lmqc_fUsSY-tBmf9GScYpCbkt3_c' }}
-                style={styles.workoutImage}
-              >
-                <View style={styles.workoutImageOverlay} />
-                <View style={styles.workoutTags}>
-                  <View style={styles.workoutTagPrimary}>
-                    <Text style={styles.workoutTagPrimaryText}>HEAVY DAY</Text>
+            {sharedWorkouts.length > 0 ? (
+              sharedWorkouts.map((workout) => (
+                <TouchableOpacity key={workout.id} style={styles.workoutCard} activeOpacity={0.9}>
+                  <ImageBackground 
+                    source={{ uri: workout.image || 'https://via.placeholder.com/400x200' }}
+                    style={styles.workoutImage}
+                  >
+                    <View style={styles.workoutImageOverlay} />
+                    <View style={styles.workoutTags}>
+                      <View style={styles.workoutTagPrimary}>
+                        <Text style={styles.workoutTagPrimaryText}>WORKOUT</Text>
+                      </View>
+                      <View style={styles.workoutTagDark}>
+                        <Text style={styles.workoutTagDarkText}>{workout.duration || 0} MIN</Text>
+                      </View>
+                    </View>
+                  </ImageBackground>
+                  <View style={styles.workoutInfo}>
+                    <View style={styles.workoutTitleRow}>
+                      <Text style={styles.workoutTitle}>{workout.title || 'Untitled'}</Text>
+                      <MaterialIcons name="more-vert" size={20} color={TEXT_MUTED} />
+                    </View>
+                    <View style={styles.workoutDetailsRow}>
+                      <View style={styles.workoutDetailItem}>
+                        <MaterialIcons name="bolt" size={14} color={PRIMARY} />
+                        <Text style={[styles.workoutDetailText, { color: TEXT_MUTED }]}>{workout.calories || 0} KCAL</Text>
+                      </View>
+                    </View>
                   </View>
-                  <View style={styles.workoutTagDark}>
-                    <Text style={styles.workoutTagDarkText}>45 MIN</Text>
-                  </View>
-                </View>
-              </ImageBackground>
-              <View style={styles.workoutInfo}>
-                <View style={styles.workoutTitleRow}>
-                  <Text style={styles.workoutTitle}>LEG DAY: MAX POWER OUTPUT</Text>
-                  <MaterialIcons name="more-vert" size={20} color={TEXT_MUTED} />
-                </View>
-                <View style={styles.workoutDetailsRow}>
-                  <View style={styles.workoutDetailItem}>
-                    <MaterialIcons name="calendar-today" size={14} color={TEXT_MUTED} />
-                    <Text style={styles.workoutDetailText}>OCT 24, 2023</Text>
-                  </View>
-                  <View style={styles.workoutDetailItem}>
-                    <MaterialIcons name="bolt" size={14} color={PRIMARY} />
-                    <Text style={[styles.workoutDetailText, { color: TEXT_MUTED }]}>840 KCAL</Text>
-                  </View>
-                </View>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.endOfActivity}>
+                <Text style={[styles.endText, { color: TEXT_MUTED }]}>NO SHARED WORKOUTS YET</Text>
               </View>
-            </TouchableOpacity>
+            )}
 
-            {/* Workout 2 */}
-            <TouchableOpacity style={styles.workoutCard} activeOpacity={0.9}>
-              <ImageBackground 
-                source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCoyxT2clTKBTEN3wnL4jeRpwwLaWW1GXpqPq9KEqFlOARHtomglpQkCxnBffw5ynvhnEqpg-8rmqgjJd7vLeueBK6KcakFyJd0RO9x9lg46p37semftW2OLPOx7CO1sFgYMzdNVOQTqWK6PLfsbCKm5eshf8J3fklpKKJGrVoeuT8sOrkrqLa79dNRzRmQQOfjOF4VjRifo6KS7TJhukbWVkNzqXk_7T3V0Vo5wZxvxDvfP8O6yhJ5X7bYT46k6DIt77QgYgxCIYA' }}
-                style={styles.workoutImage}
-              >
-                <View style={styles.workoutImageOverlay} />
-                <View style={styles.workoutTags}>
-                  <View style={[styles.workoutTagPrimary, { backgroundColor: SECONDARY }]}>
-                    <Text style={[styles.workoutTagPrimaryText, { color: '#565400' }]}>METABOLIC</Text>
+            <View style={styles.endOfActivity}>
+              <View style={styles.endLine} />
+              <Text style={styles.endText}>END OF RECENT ACTIVITY</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Posts Content (Monthly Programs) */}
+        {activeTab === 'Posts' && (
+          <View style={styles.workoutsList}>
+            {sharedPrograms.length > 0 ? (
+              sharedPrograms.map((program) => (
+                <TouchableOpacity key={program.id} style={styles.workoutCard} activeOpacity={0.9}>
+                  <ImageBackground 
+                    source={{ uri: program.coverImage || 'https://via.placeholder.com/400x200' }}
+                    style={styles.workoutImage}
+                  >
+                    <View style={styles.workoutImageOverlay} />
+                    <View style={styles.workoutTags}>
+                      <View style={[styles.workoutTagPrimary, { backgroundColor: SECONDARY }]}>
+                        <Text style={[styles.workoutTagPrimaryText, { color: '#565400' }]}>PROGRAM</Text>
+                      </View>
+                      <View style={styles.workoutTagDark}>
+                        <Text style={styles.workoutTagDarkText}>{program.workoutCount || 0} WORKOUTS</Text>
+                      </View>
+                    </View>
+                  </ImageBackground>
+                  <View style={styles.workoutInfo}>
+                    <View style={styles.workoutTitleRow}>
+                      <Text style={styles.workoutTitle}>{program.name || 'Untitled Program'}</Text>
+                      <MaterialIcons name="more-vert" size={20} color={TEXT_MUTED} />
+                    </View>
+                    <View style={styles.workoutDetailsRow}>
+                      <View style={styles.workoutDetailItem}>
+                        <Text style={styles.workoutDetailText}>{program.goal || 'General'}</Text>
+                      </View>
+                    </View>
                   </View>
-                  <View style={styles.workoutTagDark}>
-                    <Text style={styles.workoutTagDarkText}>30 MIN</Text>
-                  </View>
-                </View>
-              </ImageBackground>
-              <View style={styles.workoutInfo}>
-                <View style={styles.workoutTitleRow}>
-                  <Text style={styles.workoutTitle}>HYPER-INTENSITY INTERVALS</Text>
-                  <MaterialIcons name="more-vert" size={20} color={TEXT_MUTED} />
-                </View>
-                <View style={styles.workoutDetailsRow}>
-                  <View style={styles.workoutDetailItem}>
-                    <MaterialIcons name="calendar-today" size={14} color={TEXT_MUTED} />
-                    <Text style={styles.workoutDetailText}>OCT 22, 2023</Text>
-                  </View>
-                  <View style={styles.workoutDetailItem}>
-                    <MaterialIcons name="bolt" size={14} color={PRIMARY} />
-                    <Text style={[styles.workoutDetailText, { color: TEXT_MUTED }]}>520 KCAL</Text>
-                  </View>
-                </View>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.endOfActivity}>
+                <Text style={[styles.endText, { color: TEXT_MUTED }]}>NO SHARED PROGRAMS YET</Text>
               </View>
-            </TouchableOpacity>
+            )}
 
             <View style={styles.endOfActivity}>
               <View style={styles.endLine} />
